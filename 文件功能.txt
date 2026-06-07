@@ -1,6 +1,6 @@
 ============================================
   情绪闯关 EmoRunner - 项目文件功能详解
-  版本: v2.7 | 更新: 2026-06-07
+  版本: v2.26 | 更新: 2026-06-07
 ============================================
 
 【一、根目录 - 项目配置文件】
@@ -43,7 +43,7 @@
   ├─ Git 忽略规则
   └─ 排除 node_modules/、dist/、.env 等
 
-【二、src/ 目录 - 源代码（总计 ~3858 行）】
+【二、src/ 目录 - 源代码（总计 ~4572 行）】
 
   src/main.tsx (10 行)
   ├─ React 应用入口文件
@@ -58,11 +58,15 @@
   ├─ 像素边框样式 (.pixel-border)
   └─ [data-theme="light"] 浅色模式 CSS 覆盖（50+ 条规则）
 
-  src/types.ts (212 行)
+  src/types.ts (233 行)
   ├─ TypeScript 类型定义中心
   ├─ GameState: 'MENU' | 'CALIBRATION' | 'PRELOADING' | 'PLAYING' | 'GAMEOVER'
   ├─ CalibrationConfig: 校准参数（中性值、阈值、状态）
-  ├─ Obstacle / Coin / Particle: 游戏实体数据
+  ├─ Obstacle / ObstacleType: 障碍物定义（CRATE / PIT / CEILING_SPIKE）
+  ├─ Coin / Coin: 金币实体数据
+  ├─ PowerUp / PowerUpType: 道具系统（三连跳 / 磁铁 / 彩虹光 / 星尘尾迹）
+  ├─ POWERUP_DEFS: 道具参数（图标、标签、颜色、持续时间、是否为趣味道具）
+  ├─ Particle: 粒子碎片数据
   ├─ Skin / SkinId / SHOP_SKINS: 4 款西装皮肤定义
   ├─ Achievement / ACHIEVEMENTS: 14 项成就系统
   ├─ DailyChallenge / CHALLENGE_POOL: 每日挑战系统
@@ -71,9 +75,9 @@
   ├─ ExpressionRecord: 表情收集图鉴记录
   ├─ EmotionTitle / getEmotionTitle(): 情绪称号逻辑
   ├─ AchievementStats: 累计统计数据
-  └─ STORAGE_KEYS: localStorage 键名常量（11 项）
+  └─ STORAGE_KEYS: localStorage 键名常量（11 项，theme 键另存）
 
-  src/App.tsx (802 行)
+  src/App.tsx (888 行)
   ├─ 应用顶层根组件（全局状态大脑）
   ├─ 管理 20+ 个核心状态:
   │   gameState / calibrationConfig → 页面路由 + 校准参数
@@ -96,7 +100,7 @@
 
 【三、src/components/ - 功能组件】
 
-  MainMenu.tsx (420 行)
+  MainMenu.tsx (421 行)
   ├─ 游戏启动画面，玩家第一界面
   ├─ 显示 8-bit 像素风格标题 "情绪闯关 EmoRunner"（渐变金色动画）
   ├─ 两张核心功能卡片:
@@ -113,7 +117,7 @@
   ├─ 备用键盘操作说明
   └─ 清除所有本地数据按钮
 
-  CameraTracker.tsx (436 行)
+  CameraTracker.tsx (437 行)
   ├─ 面部表情实时追踪核心模块
   ├─ 加载流程: CDN 轮询 → 请求摄像头 → 初始化 FaceMesh
   ├─ 基于 MediaPipe FaceMesh 468 点人脸关键点模型
@@ -140,7 +144,7 @@
   ├─ 内置 CameraTracker 实时预览
   └─ 保存配置到 App 状态 + localStorage 持久化
 
-  GameEngine.tsx (1551 行)
+  GameEngine.tsx (2156 行)
   ├─ 核心 2D 横版闯关游戏逻辑
   ├─ Canvas 渲染引擎（requestAnimationFrame 60fps 游戏循环）
   ├─ 物理系统:
@@ -151,8 +155,15 @@
   ├─ 障碍物系统:
   │   木箱 (CRATE): AABB 碰撞检测，护盾撞碎 + 粒子碎片
   │   深坑 (PIT): 玩家落入即死，红色边缘警告
+  │   天花板尖刺 (CEILING_SPIKE): 从上方下落的尖刺障碍
   │   巨型木箱 (52x58): 撞碎 +5 分奖励
   │   组合关卡: 坑+箱 / 金币弧线 / 木箱墙
+  ├─ 道具系统 (PowerUp):
+  │   三连跳 (TRIPLE_JUMP): 空中可跳跃2次，持续15秒
+  │   磁铁 (MAGNET): 自动吸引附近金币，持续30秒
+  │   彩虹光 (RAINBOW_GLOW): 趣味特效道具，持续15秒
+  │   星尘尾迹 (STAR_TRAIL): 趣味尾迹特效，持续15秒
+  │   道具按权重随机生成，拾取后激活，到期自动失效
   ├─ 金币收集: 旋转椭圆硬币动画 + 碰撞检测
   ├─ 粒子系统: 木箱碎裂碎片 + 金币拾取星点
   ├─ 场景渲染:
@@ -202,8 +213,6 @@
   │ Google Fonts: Press Start 2P+Inter│ 像素字体 + 正文字体  │
   └───────────────────────────────────┴─────────────────────┘
 
-  离线版已打包完整 MediaPipe 模型文件（~17MB）于 情绪闯关 EmoRunner/mediapipe/
-
 【五、数据流架构】
 
   CameraTracker (人脸数据采集)
@@ -233,7 +242,7 @@
               ├── emotion_run_leaderboard → 本地排行榜（Top 20）
               ├── emotion_run_player_name → 玩家ID
               ├── emotion_run_expression_records → 表情图鉴（上限50条）
-              └── emotion_run_theme → 深浅主题偏好
+              └── emotion_run_theme → 深浅主题偏好（裸键，不在 STORAGE_KEYS 中）
 
 【六、关键技术特点】
 
@@ -243,5 +252,5 @@
   4. 个性化校准: 每个用户可定制自己的面部表情阈值
   5. 8-bit 音效: 纯 Web Audio API 合成，无需音频文件
   6. 深浅主题: 一键切换，CSS 变量全覆盖 50+ 组件
-  7. 离线可用: 内置完整 MediaPipe 模型 + 单文件 HTML
+  7. 道具系统: 三连跳、磁铁、彩虹光、星尘尾迹 4 种增益道具
   8. 数据持久化: 12 项 localStorage 键值，金币/皮肤/成就/排行榜/图鉴全部本地存储

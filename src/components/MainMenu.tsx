@@ -62,7 +62,7 @@ export default function MainMenu({
             情绪闯关 EmoRunner
           </h1>
           <div className="absolute -top-3 -right-6 text-[9px] font-press-start bg-rose-500 text-white font-bold px-1 py-0.5 rounded rotate-12 scale-90 animate-bounce">
-                        MVP+ v2.7
+                        MVP+ v2.25
           </div>
         </div>
         
@@ -269,8 +269,9 @@ export default function MainMenu({
                   </span>
                   <span className="text-zinc-300 font-sans truncate max-w-[80px]">{entry.name}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-zinc-500 text-[9px]">{entry.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-600 text-[8px]">{entry.time}</span>
+                  <span className="text-zinc-500 text-[8px]">{entry.title}</span>
                   <span className="font-press-start text-[9px] text-retro-gold tabular-nums">{entry.score}</span>
                 </div>
               </div>
@@ -287,9 +288,9 @@ export default function MainMenu({
             <AlertCircle className="w-6 h-6" />
           </div>
           <div className="text-xs font-sans text-zinc-400 leading-relaxed">
-            <p className="font-semibold text-zinc-300">💡 备用物理按键支持</p>
+            <p className="font-semibold text-zinc-300">💡 多模式操控支持</p>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              如果您由于权限、网络等原因无法正常开启镜头面部捕获，您可自由使用<b>[空格键/向上箭头] 控制跳跃</b>，和<b>[S 键/向下箭头] 控制防御</b>进行流畅游玩。
+              除摄像头表情识别外，您可使用 <b>[空格/左键] 跳跃</b> + <b>[S键/右键按住] 护盾</b> + <b>[ESC] 暂停</b> 进行流畅游玩，三种操控方式完全互通。
             </p>
           </div>
         </div>

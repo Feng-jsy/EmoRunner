@@ -109,8 +109,8 @@ export default function CameraTracker({
       faceMesh.setOptions({
         maxNumFaces: 1,
         refineLandmarks: true,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.6,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
       });
 
       faceMesh.onResults(onFaceMeshResults);
@@ -120,9 +120,9 @@ export default function CameraTracker({
       const camera = new Camera(videoRef.current, {
         onFrame: async () => {
           if (!activeTrackingRef.current) return;
-          // Limit tracking to ~30 FPS to save user CPU
+          // Limit tracking to ~20 FPS for CPU efficiency, still responsive
           const now = Date.now();
-          if (now - lastFrameTimeRef.current >= 33) {
+          if (now - lastFrameTimeRef.current >= 50) {
             lastFrameTimeRef.current = now;
             await faceMesh.send({ image: videoRef.current! });
           }
@@ -315,12 +315,13 @@ export default function CameraTracker({
 
   return (
     <div className="relative w-full h-full bg-[#161623] rounded-2xl overflow-hidden pixel-border border-zinc-800 flex flex-col items-center justify-center">
-      {/* Mirror HTML5 Hidden Video Element (Required by MediaPipe) */}
+      {/* Mirror HTML5 Video Element (must be rendered, not display:none, for MediaPipe) */}
       <video
         ref={videoRef}
         playsInline
         muted
-        style={{ display: 'none', width: '320px', height: '240px' }}
+        autoPlay
+        style={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }}
       />
 
       {/* Screen view depending on loading status */}

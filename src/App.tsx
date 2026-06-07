@@ -9,7 +9,7 @@ import MainMenu from './components/MainMenu';
 import CalibrationMenu from './components/CalibrationMenu';
 import GameEngine from './components/GameEngine';
 import CameraTracker from './components/CameraTracker';
-import { Sparkles, Trophy, Sparkle, RefreshCw, Gamepad2, Skull, Sun, Moon, Share2, Check } from 'lucide-react';
+import { Sparkles, Trophy, Sparkle, RefreshCw, Gamepad2, Skull, Sun, Moon, Share2, Check, Medal } from 'lucide-react';
 
 const CALIBRATION_LOCAL_KEY = 'emotion_run_calibration_config';
 
@@ -46,7 +46,7 @@ export default function App() {
   const [dailyChallenge, setDailyChallenge] = useState<DailyChallenge>(generateDailyChallenge);
   const [challengeCompleted, setChallengeCompleted] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
-  const [playerName, setPlayerName] = useState<string>('打工人');
+  const [playerName, setPlayerName] = useState<string>('匿名玩家');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [expressionRecords, setExpressionRecords] = useState<ExpressionRecord[]>([]);
 
@@ -127,6 +127,26 @@ export default function App() {
       setGameState('PLAYING');
     }
   }, [gameState, cameraReady]);
+
+  // Double-tap spacebar to restart on game over
+  useEffect(() => {
+    if (gameState !== 'GAMEOVER') return;
+    let lastTap = 0;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        const now = Date.now();
+        if (lastTap > 0 && now - lastTap < 500) {
+          handleRestartGame();
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [gameState]);
 
   function handleCameraStatus(status: 'LOADING_SCRIPTS' | 'WAITING_CAMERA' | 'READY' | 'ERROR') {
     if (status === 'READY' || status === 'ERROR') {
@@ -233,28 +253,18 @@ export default function App() {
       setIsNewHigh(false);
     }
 
-    // Save to leaderboard (same ID: keep higher score)
+    // Save to leaderboard — always append new entry, never overwrite
+    const now = new Date();
     const displayName = playerName.trim() || '匿名玩家';
     const newEntry: LeaderboardEntry = {
       name: displayName,
       score: scoreVal,
       coins: coinsVal,
       title: getEmotionTitle(shattered, jumps, coinsVal),
-      date: new Date().toISOString().slice(0, 10),
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
     };
-    const existingIdx = leaderboard.findIndex(e => e.name === displayName);
-    let updatedLeaderboard: LeaderboardEntry[];
-    if (existingIdx >= 0) {
-      if (scoreVal > leaderboard[existingIdx].score) {
-        updatedLeaderboard = [...leaderboard];
-        updatedLeaderboard[existingIdx] = newEntry;
-      } else {
-        updatedLeaderboard = leaderboard;
-      }
-    } else {
-      updatedLeaderboard = [...leaderboard, newEntry];
-    }
-    updatedLeaderboard = updatedLeaderboard
+    const updatedLeaderboard = [newEntry, ...leaderboard]
       .sort((a, b) => b.score - a.score)
       .slice(0, 20);
     setLeaderboard(updatedLeaderboard);
@@ -316,7 +326,7 @@ export default function App() {
     setShowAchievements(false);
     setLeaderboard([]);
     setExpressionRecords([]);
-    setPlayerName('打工人');
+    setPlayerName('匿名玩家');
   }
 
   function startGameFlow() {
@@ -547,7 +557,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="bg-[#121221] p-4 rounded-2xl border border-zinc-800 space-y-3 mb-8 text-left max-w-sm mx-auto font-mono text-zinc-400">
+            <div className="bg-[#121221] p-4 rounded-2xl border border-zinc-800 space-y-3 mb-6 text-left max-w-sm mx-auto font-mono text-zinc-400">
               <div className="flex justify-between items-center text-sm pb-1.5 border-b border-zinc-800">
                 <span>奔跑里程（最终得分）:</span>
                 <span className="text-retro-gold font-press-start text-xs font-bold">{lastScore}</span>
@@ -566,7 +576,8 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
+            {/* Quick restart button */}
+            <div className="flex flex-col gap-2 max-w-sm mx-auto mb-4">
               <button
                 onClick={handleRestartGame}
                 className="w-full py-3.5 bg-gradient-to-r from-retro-green to-emerald-500 hover:from-[#5eff42] hover:to-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition font-press-start text-[10px] flex items-center justify-center gap-1.5 cursor-pointer"
@@ -574,7 +585,79 @@ export default function App() {
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 再玩一局 (RETRY)
               </button>
+              <p className="text-[9px] text-zinc-600 font-sans text-center">或<b className="text-zinc-400">双击 [空格键]</b> 快速重开</p>
+            </div>
 
+            {/* Name input for leaderboard */}
+            <div className="bg-[#121221] border-2 border-retro-gold/30 rounded-2xl p-4 mb-4 text-center max-w-sm mx-auto">
+              <label className="font-press-start text-[8px] text-retro-gold block mb-2">
+                🏷️ 留下你的大名
+              </label>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => {
+                  const newName = e.target.value.slice(0, 8);
+                  setPlayerName(newName);
+                  try { localStorage.setItem(STORAGE_KEYS.playerName, newName); } catch (_) {}
+                  // Update name in leaderboard — find the latest entry and rename
+                  setLeaderboard(prev => {
+                    const updated = [...prev];
+                    const idx = updated.findIndex(
+                      e => e.date === new Date().toISOString().slice(0, 10) && e.score === lastScore
+                    );
+                    if (idx >= 0) {
+                      updated[idx] = { ...updated[idx], name: newName.trim() || '匿名玩家' };
+                      localStorage.setItem(STORAGE_KEYS.leaderboard, JSON.stringify(updated));
+                    }
+                    return updated;
+                  });
+                }}
+                placeholder="输入玩家ID"
+                maxLength={8}
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-200 text-sm font-sans outline-none w-full text-center placeholder-zinc-600 focus:border-retro-gold transition"
+              />
+            </div>
+
+            {/* Leaderboard on death screen */}
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4 mb-6 text-left max-w-sm mx-auto">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
+                <Medal className="w-4 h-4 text-retro-gold" />
+                <span className="font-press-start text-[9px] text-retro-gold">本地排行榜</span>
+                <span className="ml-auto text-[8px] text-zinc-600">TOP 10</span>
+              </div>
+              <div className="space-y-1 max-h-[240px] overflow-y-auto">
+                {leaderboard.slice(0, 10).map((entry, idx) => (
+                  <div
+                    key={`${entry.name}-${entry.date}-${entry.time}-${idx}`}
+                    className={`flex items-center justify-between text-[10px] px-2 py-1.5 rounded ${
+                      entry.name === (playerName.trim() || '匿名玩家')
+                        ? 'bg-retro-gold/10 border border-retro-gold/30'
+                        : 'bg-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`font-press-start text-[9px] w-5 text-center ${
+                        idx === 0 ? 'text-retro-gold' : idx === 1 ? 'text-zinc-300' : idx === 2 ? 'text-amber-600' : 'text-zinc-600'
+                      }`}>
+                        {idx === 0 ? '👑' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}
+                      </span>
+                      <span className="text-zinc-300 font-sans truncate max-w-[80px]">{entry.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-600 text-[7px]">{entry.time}</span>
+                      <span className="text-zinc-500 text-[8px]">{entry.title}</span>
+                      <span className="font-press-start text-[9px] text-retro-gold tabular-nums">{entry.score}</span>
+                    </div>
+                  </div>
+                ))}
+                {leaderboard.length === 0 && (
+                  <p className="text-zinc-600 text-[10px] text-center py-4">暂无纪录</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 max-w-xs mx-auto">
               <button
                 onClick={() => setGameState('MENU')}
                 className="w-full py-3 bg-zinc-805 hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl transition font-sans text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-800"

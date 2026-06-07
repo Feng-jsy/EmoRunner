@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { GameState, Obstacle, Coin, Particle, GameScore, SkinId, MiniObjective, pickRandomMiniObjective, SHOP_SKINS } from '../types';
+import { GameState, Obstacle, Coin, Particle, GameScore, SkinId, MiniObjective, pickRandomMiniObjective, SHOP_SKINS, PowerUp, PowerUpType, POWERUP_DEFS } from '../types';
 import { Trophy, HelpCircle, Volume2, VolumeX, ShieldAlert, Zap } from 'lucide-react';
 
 interface GameEngineProps {
@@ -151,24 +151,88 @@ class RetroAudioEngine {
       const t = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      
+
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(300, t);
       osc.frequency.linearRampToValueAtTime(50, t + 0.6);
-      
+
       gain.gain.setValueAtTime(0.2, t);
       gain.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
-      
+
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-      
+
       osc.start(t);
       osc.stop(t + 0.6);
+    } catch (_) {}
+  }
+
+  playImpale() {
+    if (!this.enabled) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+
+      // Sharp metallic sting
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'square';
+      osc1.frequency.setValueAtTime(880, t);
+      osc1.frequency.exponentialRampToValueAtTime(220, t + 0.15);
+      gain1.gain.setValueAtTime(0.18, t);
+      gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      osc1.start(t);
+      osc1.stop(t + 0.2);
+
+      // Low thud
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(80, t + 0.05);
+      osc2.frequency.exponentialRampToValueAtTime(30, t + 0.4);
+      gain2.gain.setValueAtTime(0.25, t + 0.05);
+      gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      osc2.start(t + 0.05);
+      osc2.stop(t + 0.45);
     } catch (_) {}
   }
 }
 
 const audio = new RetroAudioEngine();
+
+// Over-the-top praise messages for every 1000m milestone
+const PRAISE_POOL: string[] = [
+  '老板看了都想给你加薪！💰',
+  '你的腿是装了火箭吗？🚀',
+  '隔壁公司HR已在挖你！📞',
+  '你是情绪管理大师！🧘',
+  '投资人已经坐不住了！💼',
+  '连马斯克都想见你！🦾',
+  '你的表情肌是钛合金的！🤖',
+  '华尔街在讨论你了！📈',
+  '超越99.9%的打工人！🏅',
+  '简历上可以写这个！📝',
+  '你就是赛道之王！👑',
+  'IPO都得等你点头！🏦',
+  '福布斯下次封面人物！📰',
+  '你的耐力令博尔特汗颜！⚡',
+  'CEO看了连夜写推荐信！✉️',
+  '你是情绪闯关的神！⚡',
+  'GPT-6都不如你稳定！🧬',
+  'KPI？你就是KPI本身！🎯',
+  '董事会给你留了位置！🪑',
+  '你的微笑值一个亿！😎',
+  '投资人抢着给你打钱！💸',
+  '你的抗压能力超越AI！🏋️',
+  '猎头已经打爆你电话了！📱',
+  '你是打工人的终极形态！🦸',
+  '联合国发来贺电！🌍',
+];
 
 export default function GameEngine({
   gameState,
@@ -201,6 +265,7 @@ export default function GameEngine({
   // Active game logic references (bypass React state delays for 60fps loop)
   const gameLoopIdRef = useRef<number | null>(null);
   const gameActiveRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(false);
   const scoreRef = useRef<number>(0);
   const coinsRef = useRef<number>(0);
 
@@ -224,6 +289,8 @@ export default function GameEngine({
     width: 28,
     height: 36,
     isGrounded: true,
+    airJumpsLeft: 0,
+    doubleJumpFlash: 0, // frames for visual flash after double jump
     shieldActive: false,
     frame: 0,
     animationTick: 0,
@@ -244,12 +311,17 @@ export default function GameEngine({
   const totalJumpsRef = useRef<number>(0);
   const lastMilestoneRef = useRef<number>(0);
   const milestoneAlphaRef = useRef<number>(0);
-  const rageModeRef = useRef<number>(0); // > 0 = rage active, counts down frames
-  const firstCoinRainRef = useRef<boolean>(true); // first rain spells version number
+  const praiseMessageRef = useRef<string>('');
+  const coinRainPhaseRef = useRef<number>(0); // 0="v2.25", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
   const miniObjCelebrateRef = useRef<number>(0); // celebration timer frames
+  const powerUpsRef = useRef<PowerUp[]>([]);
+  const activePowerUpRef = useRef<PowerUpType | null>(null);
+  const powerUpExpiryRef = useRef<number>(0); // timestamp when power-up expires
+  const oxygenRef = useRef<number>(1.0); // shield oxygen 0-1
+  const lastTickTimeRef = useRef<number>(0); // for real-time delta calculation
 
   const skin = SHOP_SKINS.find((s) => s.id === skinId) || SHOP_SKINS[0];
 
@@ -315,10 +387,12 @@ export default function GameEngine({
     // Surprise maps to shield status
     const shouldShield = surpriseLevel > surpriseThreshold;
     if (shouldShield !== playerRef.current.shieldActive) {
-      if (shouldShield) {
+      if (shouldShield && oxygenRef.current > 0) {
         audio.playShieldOn();
+        playerRef.current.shieldActive = true;
+      } else if (!shouldShield) {
+        playerRef.current.shieldActive = false;
       }
-      playerRef.current.shieldActive = shouldShield;
     }
   }, [smileLevel, surpriseLevel, smileThreshold, surpriseThreshold, gameState]);
 
@@ -327,7 +401,16 @@ export default function GameEngine({
     const handleKeyDown = (e: KeyboardEvent) => {
       keyboardStateRef.current[e.key] = true;
 
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (gameState === 'PLAYING') {
+          pausedRef.current = !pausedRef.current;
+        }
+        return;
+      }
+
       if (gameState !== 'PLAYING') return;
+      if (pausedRef.current) return;
 
       if (e.key === ' ' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -336,7 +419,7 @@ export default function GameEngine({
 
       if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
         e.preventDefault();
-        if (!playerRef.current.shieldActive) {
+        if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
           audio.playShieldOn();
           playerRef.current.shieldActive = true;
         }
@@ -353,12 +436,39 @@ export default function GameEngine({
       }
     };
 
+    const handleMouseDown = (e: MouseEvent) => {
+      if (gameState !== 'PLAYING' || pausedRef.current) return;
+      if (e.button === 0) { // left click = jump
+        e.preventDefault();
+        triggerJump();
+      } else if (e.button === 2) { // right click = shield
+        e.preventDefault();
+        if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
+          audio.playShieldOn();
+          playerRef.current.shieldActive = true;
+        }
+      }
+    };
+    const handleMouseUp = (e: MouseEvent) => {
+      if (gameState !== 'PLAYING' || pausedRef.current) return;
+      if (e.button === 2) { // release right = shield off
+        playerRef.current.shieldActive = false;
+      }
+    };
+    const preventCtx = (e: Event) => e.preventDefault();
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('contextmenu', preventCtx);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('contextmenu', preventCtx);
     };
   }, [gameState]);
 
@@ -413,11 +523,34 @@ export default function GameEngine({
   function triggerJump() {
     const player = playerRef.current;
     if (player.isGrounded) {
+      // First jump from ground
       player.vy = -4.0;
       player.isGrounded = false;
+      player.airJumpsLeft = activePowerUpRef.current === 'TRIPLE_JUMP' ? 2 : 1;
       totalJumpsRef.current++;
       updateMiniObj('jump_count');
       audio.playJump();
+    } else if (player.airJumpsLeft > 0) {
+      // Air jump (double / triple)
+      player.vy = -3.8;
+      player.airJumpsLeft--;
+      player.doubleJumpFlash = 12; // visual flash duration
+      totalJumpsRef.current++;
+      updateMiniObj('jump_count');
+      audio.playJump();
+      // Burst particles at double jump position
+      for (let i = 0; i < 10; i++) {
+        particlesRef.current.push({
+          x: player.x + player.width / 2 + (Math.random() - 0.5) * 20,
+          y: player.y + player.height / 2 + (Math.random() - 0.5) * 10,
+          vx: (Math.random() - 0.5) * 5,
+          vy: (Math.random() - 0.5) * 5 - 1,
+          size: Math.random() * 4 + 2,
+          color: Math.random() > 0.5 ? '#ffcc00' : '#ffffff',
+          alpha: 1,
+          life: 0.7,
+        });
+      }
     }
   }
 
@@ -436,6 +569,8 @@ export default function GameEngine({
       width: 28,
       height: 36,
       isGrounded: true,
+      airJumpsLeft: 0,
+      doubleJumpFlash: 0,
       shieldActive: false,
       frame: 0,
       animationTick: 0,
@@ -457,8 +592,13 @@ export default function GameEngine({
     totalJumpsRef.current = 0;
     lastMilestoneRef.current = 0;
     milestoneAlphaRef.current = 0;
-    rageModeRef.current = 0;
-    firstCoinRainRef.current = true;
+    praiseMessageRef.current = '';
+    coinRainPhaseRef.current = 0;
+    powerUpsRef.current = [];
+    activePowerUpRef.current = null;
+    powerUpExpiryRef.current = 0;
+    lastTickTimeRef.current = 0;
+    oxygenRef.current = 1.0;
     miniObjRef.current = pickRandomMiniObjective();
     miniObjProgressRef.current = 0;
     miniObjDoneRef.current = false;
@@ -471,6 +611,7 @@ export default function GameEngine({
     frameCounterRef.current = 0;
 
     // Begin looping
+    pausedRef.current = false;
     gameActiveRef.current = true;
     gameLoopIdRef.current = requestAnimationFrame(runGameTick);
   }
@@ -519,8 +660,18 @@ export default function GameEngine({
     const W = canvas.width;
     const H = canvas.height;
 
-    // --- 1. PHYSICS UPDATE ---
+    // Real-time delta (cap to avoid huge jumps on tab switch)
+    const dt = Math.min(0.1, lastTickTimeRef.current ? (timestamp - lastTickTimeRef.current) / 1000 : 1 / 60);
+    lastTickTimeRef.current = timestamp;
+
+    const player = playerRef.current;
     const speed = speedRef.current;
+
+    // Skip physics when paused (but still render the frozen frame)
+    const isPaused = pausedRef.current;
+    if (!isPaused) {
+
+    // --- 1. PHYSICS UPDATE ---
     distanceTraveledRef.current += speed;
     scoreRef.current = Math.floor(distanceTraveledRef.current / 10);
     if (comboCountRef.current >= 3) {
@@ -559,19 +710,15 @@ export default function GameEngine({
       }
     }
 
-    // Milestone check (every 1000m)
+    // Milestone check (every 1000m) + random praise message
     const currentMilestone = Math.floor(distanceTraveledRef.current / 1000);
     if (currentMilestone > lastMilestoneRef.current) {
       lastMilestoneRef.current = currentMilestone;
       milestoneAlphaRef.current = 1.0;
+      praiseMessageRef.current = PRAISE_POOL[Math.floor(Math.random() * PRAISE_POOL.length)];
     }
     if (milestoneAlphaRef.current > 0) {
       milestoneAlphaRef.current = Math.max(0, milestoneAlphaRef.current - 0.016);
-    }
-
-    // Rage mode decay
-    if (rageModeRef.current > 0) {
-      rageModeRef.current--;
     }
 
     // Mini-objective celebration timer decay
@@ -605,8 +752,28 @@ export default function GameEngine({
       playerRef.current.pushedAlertTick--;
     }
 
+    // Double jump flash cooldown
+    if (playerRef.current.doubleJumpFlash > 0) {
+      playerRef.current.doubleJumpFlash--;
+    }
+
+    // Shield oxygen management (6s to deplete, 6s to refill) — real-time
+    if (playerRef.current.shieldActive) {
+      oxygenRef.current -= dt / 6;
+      if (oxygenRef.current <= 0) {
+        oxygenRef.current = 0;
+        playerRef.current.shieldActive = false;
+      }
+    } else {
+      oxygenRef.current = Math.min(1, oxygenRef.current + dt / 6);
+    }
+
+    // Power-up timer — real-time expiry
+    if (activePowerUpRef.current && Date.now() >= powerUpExpiryRef.current) {
+      activePowerUpRef.current = null;
+    }
+
     // Player Gravity Physics
-    const player = playerRef.current;
     player.vy += gravity;
     player.y += player.vy;
 
@@ -633,11 +800,16 @@ export default function GameEngine({
       if (isInPitSector) {
         // Player falls into the pit void! Cannot stand on ground here.
         player.isGrounded = false;
+        // Grant one emergency air jump when sliding into a pit
+        if (player.airJumpsLeft === 0) {
+          player.airJumpsLeft = 1;
+        }
       } else {
         // Safe ground landing
         player.y = floorYLevel - player.height;
         player.vy = 0;
         player.isGrounded = true;
+        player.airJumpsLeft = 0;
       }
     }
 
@@ -714,14 +886,34 @@ export default function GameEngine({
           type: 'CRATE', x: W + 20, width: 32, height: 38, color: '#c07038',
         });
       } else if (rand < pitThreshold) {
-        obstaclesRef.current.push({
-          id: `pit_${Date.now()}`,
-          type: 'PIT', x: W + 20, width: 105, height: 120, color: '#111119',
-        });
-        coinsListRef.current.push({
-          id: `coin_${Date.now()}`,
-          x: W + 20 + 38, y: floorYLevel - 80, collected: false,
-        });
+        // After 2000m, chance to spawn closely-spaced pit pairs (never 3)
+        const pitPairChance = dist > 2000 ? Math.min(0.55, (dist - 2000) / 5000) : 0;
+        if (Math.random() < pitPairChance) {
+          const gap = 60 + Math.random() * 100; // tight gap between pits
+          const pitW = 70 + Math.random() * 30;
+          obstaclesRef.current.push({
+            id: `pit_pairA_${Date.now()}`,
+            type: 'PIT', x: W + 20, width: pitW, height: 120, color: '#111119',
+          });
+          obstaclesRef.current.push({
+            id: `pit_pairB_${Date.now()}`,
+            type: 'PIT', x: W + 20 + pitW + gap, width: pitW + Math.random() * 20, height: 120, color: '#111119',
+          });
+          // Reward coin in the gap
+          coinsListRef.current.push({
+            id: `coin_gap_${Date.now()}`,
+            x: W + 20 + pitW + gap / 2, y: floorYLevel - 75, collected: false,
+          });
+        } else {
+          obstaclesRef.current.push({
+            id: `pit_${Date.now()}`,
+            type: 'PIT', x: W + 20, width: 105, height: 120, color: '#111119',
+          });
+          coinsListRef.current.push({
+            id: `coin_${Date.now()}`,
+            x: W + 20 + 38, y: floorYLevel - 80, collected: false,
+          });
+        }
       } else if (rand < coinThreshold) {
         const count = 3 + Math.floor(Math.random() * 3);
         for (let idx = 0; idx < count; idx++) {
@@ -736,31 +928,44 @@ export default function GameEngine({
     }
 
     // --- SURPRISE EVENTS ---
-    // Rage mode: rare auto-activation (~0.05% per frame)
-    if (rageModeRef.current === 0 && Math.random() < 0.0003) {
-      rageModeRef.current = 180;
-      audio.playJump();
+
+    // Power-up spawn: rare (~0.025% per frame), magnet appears 3x more
+    if (distanceTraveledRef.current > 150 && Math.random() < 0.00025) {
+      const weighted: PowerUpType[] = ['TRIPLE_JUMP', 'MAGNET', 'MAGNET', 'MAGNET', 'RAINBOW_GLOW', 'STAR_TRAIL'];
+      const t = weighted[Math.floor(Math.random() * weighted.length)];
+      const def = POWERUP_DEFS[t];
+      powerUpsRef.current.push({
+        id: `pu_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
+        type: t,
+        x: W + Math.random() * 100,
+        y: floorYLevel - 70 - Math.random() * 80,
+        collected: false,
+        icon: def.icon,
+        label: def.label,
+        color: def.color,
+      });
     }
 
-    // Coin rain: 0.08% chance per spawn
+    // Coin rain: 0.08% chance per frame
     if (Math.random() < 0.0008) {
       const now = Date.now();
-      const coinSize = 10; // spacing between coins in patterns
+      const coinSize = 10;
 
-      if (firstCoinRainRef.current) {
-        // First rain: spell out "v2.7" in pixel art
-        firstCoinRainRef.current = false;
+      if (coinRainPhaseRef.current === 0) {
+        // First rain: spell out "v2.25"
+        coinRainPhaseRef.current = 1;
         const startX = W + 20;
         const startY = 100;
-        const charV = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,1],[4,3],[5,2]];
-        const char2 = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,3],[4,2],[5,1],[6,0],[6,1],[6,2],[6,3],[6,4]];
-        const charDot = [[5,1],[6,1]];
-        const char7 = [[0,0],[0,1],[0,2],[0,3],[0,4],[1,4],[2,3],[3,2],[4,1],[5,0],[6,0]];
+        const charV  = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,1],[4,3],[5,2]];
+        const char2  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,3],[4,2],[5,1],[6,0],[6,1],[6,2],[6,3],[6,4]];
+        const charDot = [[4,1],[5,1]];
+        const char1  = [[0,2],[1,1],[1,2],[2,2],[3,2],[4,2],[5,2],[6,0],[6,1],[6,2],[6,3]];
         const chars: [number, number, number[][]][] = [
           [0, 0, charV],
           [6, 0, char2],
-          [12, 0, charDot],
-          [16, 0, char7],
+          [13, 0, charDot],
+          [19, 0, char2],
+          [26, 0, char2],
         ];
         let id = 0;
         chars.forEach(([colOffset, _rowOffset, bitmap]) => {
@@ -773,12 +978,97 @@ export default function GameEngine({
             });
           });
         });
+      } else if (coinRainPhaseRef.current === 1) {
+        // Second rain: spell out "hello~"
+        coinRainPhaseRef.current = 2;
+        const startX = W + 20;
+        const startY = 100;
+        // 5-col x 7-row pixel font
+        const charH: number[][] = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,1],[3,2],[3,3],[3,4],[4,0],[4,4],[5,0],[5,4],[6,0],[6,4]];
+        const charE: number[][] = [[1,1],[1,2],[1,3],[2,0],[2,4],[3,0],[3,1],[3,2],[3,3],[3,4],[4,0],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const charL: number[][] = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[6,1],[6,2],[6,3]];
+        const charO: number[][] = [[1,1],[1,2],[1,3],[2,0],[2,4],[3,0],[3,4],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const charTilde: number[][] = [[3,2],[4,1],[4,3],[5,0],[5,4]];
+        const helloChars: [number, number, number[][]][] = [
+          [0, 0, charH],
+          [6, 0, charE],
+          [12, 0, charL],
+          [18, 0, charL],
+          [24, 0, charO],
+          [30, 0, charTilde],
+        ];
+        let id = 0;
+        helloChars.forEach(([colOffset, _rowOffset, bitmap]) => {
+          bitmap.forEach(([r, c]) => {
+            coinsListRef.current.push({
+              id: `rain_${now}_${id++}`,
+              x: startX + (colOffset + c) * coinSize,
+              y: startY + r * coinSize,
+              collected: false,
+            });
+          });
+        });
       } else {
-        // Subsequent rains: random geometric patterns
-        const pattern = Math.floor(Math.random() * 4); // 0=arc, 1=diamond, 2=wave, 3=spiral
-        const cx = W + 180;
-        const cy = 150;
-        const n = 14 + Math.floor(Math.random() * 8); // 14-21 coins
+        // Subsequent rains: 50% word, 50% geometric
+        const pixFont: Record<string, string> = {
+          a: '0111010001111111000110001100011000110001',
+          b: '1111010001100011111010001100011000111110',
+          c: '0111010001100001000010000100011000101110',
+          d: '1111010001100011000110001100011000111110',
+          e: '1111110000100001111010000100001000011111',
+          f: '1111110000100001111010000100001000010000',
+          g: '0111010001100001011110001100011000101110',
+          h: '1000110001100011111110001100011000110001',
+          i: '0111000100001000010000100001000010001110',
+          j: '0011100010000100001000010000100010011000',
+          k: '1000110010101001100010100100101001010001',
+          l: '1000010000100001000010000100001000011110',
+          m: '1000111011101011010110001100011000110001',
+          n: '1000111001101011001110001100011000110001',
+          o: '0111010001100011000110001100011000101110',
+          p: '1111010001100011111010000100001000010000',
+          r: '1111010001100011111010100100101001010001',
+          s: '0111010001100000111000001000110001011100',
+          t: '1111100100001000010000100001000010000100',
+          u: '1000110001100011000110001100011000101110',
+          w: '1000110001100011000110101101011010101010',
+          x: '1000110001010100010001010010001100010001',
+          y: '1000110001010100010000100001000010000100',
+          z: '1111100001000100010001000100001000011111',
+        };
+        function spellWord(word: string, startX: number, startY: number, size: number) {
+          let id = 0;
+          let colOff = 0;
+          for (const ch of word) {
+            const bitmap = pixFont[ch];
+            if (!bitmap) { colOff += 6; continue; }
+            for (let row = 0; row < 7; row++) {
+              for (let col = 0; col < 5; col++) {
+                if (bitmap[row * 5 + col] === '1') {
+                  coinsListRef.current.push({
+                    id: `rain_${now}_${id++}`,
+                    x: startX + (colOff + col) * size,
+                    y: startY + row * size,
+                    collected: false,
+                  });
+                }
+              }
+            }
+            colOff += 6;
+          }
+        }
+
+        const words = ['wow','lol','gg','win','yes','cool','nice','fun','pro','fire','jump','boss','epic','good','omg','ggwp','ha','yo','go','ace'];
+        if (Math.random() < 0.5) {
+          // Spell a random word
+          const word = words[Math.floor(Math.random() * words.length)];
+          spellWord(word, W + 20, 100, 10);
+        } else {
+          // Geometric patterns
+          const pattern = Math.floor(Math.random() * 4);
+          const cx = W + 180;
+          const cy = 150;
+          const n = 14 + Math.floor(Math.random() * 8);
 
         if (pattern === 0) {
           const a = 0.004 + Math.random() * 0.004;
@@ -829,6 +1119,7 @@ export default function GameEngine({
             });
           }
         }
+        } // end geometric patterns else
       }
     }
 
@@ -841,6 +1132,22 @@ export default function GameEngine({
         width: 52,
         height: 58,
         color: '#8b0000',
+      });
+    }
+
+    // Ceiling spikes: appear after 200m, zone-dependent chance
+    const spikeZoneIdx = Math.floor(distanceTraveledRef.current / 2000) % 3;
+    const spikeZoneChance = [0.00015, 0.00025, 0.0001][spikeZoneIdx]; // 自信/焦虑/爆发
+    if (distanceTraveledRef.current > 200 && Math.random() < spikeZoneChance) {
+      const spikeDepth = 170 + Math.random() * 120; // how far down from ceiling (170-290px)
+      const spikeWidth = 60 + Math.random() * 140; // cluster width
+      obstaclesRef.current.push({
+        id: `spike_${Date.now()}`,
+        type: 'CEILING_SPIKE',
+        x: W + Math.random() * 60,
+        width: spikeWidth,
+        height: spikeDepth,
+        color: '#8a8a9a',
       });
     }
 
@@ -879,6 +1186,7 @@ export default function GameEngine({
           player.y = oxTop - player.height;
           player.vy = 0;
           player.isGrounded = true;
+          player.airJumpsLeft = 0;
         }
 
         // Side collision: only when NOT standing on this crate
@@ -891,19 +1199,19 @@ export default function GameEngine({
           );
 
           if (sideCollision) {
-            if (player.shieldActive || rageModeRef.current > 0) {
+            if (player.shieldActive) {
               obs.isShattered = true;
               player.shatteredCount++;
               updateMiniObj('shatter_crates');
-              if (rageModeRef.current === 0) {
-                comboCountRef.current++;
-                comboTimerRef.current = 120;
-                if (comboCountRef.current > maxComboRef.current) {
-                  maxComboRef.current = comboCountRef.current;
-                }
+              comboCountRef.current++;
+              comboTimerRef.current = 120;
+              if (comboCountRef.current > maxComboRef.current) {
+                maxComboRef.current = comboCountRef.current;
               }
-              const particleColor = rageModeRef.current > 0 ? '#ff4444' : '#a05a2c';
-              makeShatterParticles(obs.x, oxTop, particleColor);
+              // Shield shatter costs extra oxygen (bigger crate = more drain)
+              const crateCost = obs.width > 45 ? 0.4 : obs.width > 32 ? 0.25 : 0.15;
+              oxygenRef.current = Math.max(0, oxygenRef.current - crateCost);
+              makeShatterParticles(obs.x, oxTop, '#a05a2c');
               audio.playBlockShatter();
               if (obs.width > 40) {
                 scoreRef.current += 5; // giant crate bonus
@@ -920,10 +1228,35 @@ export default function GameEngine({
           }
         }
       }
+
+      // Ceiling spike collision: player's head hits spikes when jumping
+      if (obs.type === 'CEILING_SPIKE' && !obs.isShattered) {
+        const pxLeft = player.x;
+        const pxRight = player.x + player.width;
+        const pxTop = player.y; // top of player
+
+        const sxLeft = obs.x;
+        const sxRight = obs.x + obs.width;
+        const sxBottom = obs.height; // spike tip extends down to this y
+
+        // Player head enters the spike zone
+        if (pxRight > sxLeft + 4 && pxLeft < sxRight - 4 && pxTop <= sxBottom) {
+          if (player.shieldActive) {
+            // Shield shatters the spike, but costs oxygen
+            obs.isShattered = true;
+            oxygenRef.current = Math.max(0, oxygenRef.current - 0.3);
+            makeShatterParticles(obs.x + obs.width / 2, sxBottom, '#8a8a9a');
+            audio.playBlockShatter();
+          } else {
+            triggerDeathState('impaled');
+            return;
+          }
+        }
+      }
     });
 
     // Check if player has fallen deep through the pit
-    if (player.y > floorYLevel + 50) {
+    if (player.y > floorYLevel + 140) {
       triggerDeathState('fell');
       return;
     }
@@ -977,12 +1310,60 @@ export default function GameEngine({
       }
     });
 
+    // Scroll and resolve Power-ups
+    powerUpsRef.current.forEach((pu, idx) => {
+      pu.x -= speed;
+      if (pu.x < -50) { powerUpsRef.current.splice(idx, 1); return; }
+      if (!pu.collected) {
+        const dist = Math.sqrt(
+          Math.pow((player.x + 14) - pu.x, 2) + Math.pow((player.y + 18) - pu.y, 2)
+        );
+        if (dist < 26) {
+          pu.collected = true;
+          activePowerUpRef.current = pu.type;
+          powerUpExpiryRef.current = Date.now() + POWERUP_DEFS[pu.type].durationSec * 1000;
+          audio.playCoin();
+          // Celebration particles
+          for (let i = 0; i < 12; i++) {
+            particlesRef.current.push({
+              x: pu.x, y: pu.y,
+              vx: (Math.random() - 0.5) * 6,
+              vy: (Math.random() - 0.5) * 6 - 2,
+              size: Math.random() * 4 + 3,
+              color: pu.color,
+              alpha: 1, life: 0.9,
+            });
+          }
+        }
+      }
+    });
+
+    // Magnet: pull nearby coins toward player
+    if (activePowerUpRef.current === 'MAGNET') {
+      const px = player.x + player.width / 2;
+      const py = player.y + player.height / 2;
+      coinsListRef.current.forEach(c => {
+        if (!c.collected) {
+          const dx = px - c.x;
+          const dy = py - c.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 180 && dist > 5) {
+            const force = 2.5 / dist;
+            c.x += dx * force;
+            c.y += dy * force;
+          }
+        }
+      });
+    }
+
     // Update animations frames
     player.animationTick++;
     if (player.animationTick % 8 === 0) {
       player.frame = (player.frame + 1) % 4;
     }
 
+
+    } // end if (!isPaused) — rendering still happens below when paused
 
     // --- 2. RENDER GRAPHICS CANVAS ---
     // Smooth zone transition: blend over last 500m of each 2000m zone
@@ -1059,38 +1440,56 @@ export default function GameEngine({
     ctx.fill();
 
     const renderFloorWithPits = () => {
+      // Collect pit regions (sorted left→right)
+      const pitRegions = obstaclesRef.current
+        .filter(o => o.type === 'PIT')
+        .map(o => ({ left: o.x, right: o.x + o.width }));
+
       // Base ground surface
       ctx.fillStyle = curGround;
       ctx.fillRect(0, floorYLevel, W, H - floorYLevel);
 
-      // Continuous solid neon top border line
-      ctx.fillStyle = '#39ff14';
-      ctx.fillRect(0, floorYLevel - 2, W, 4);
+      // Draw pits / voids first
+      pitRegions.forEach(pit => {
+        ctx.fillStyle = '#0f0f1c';
+        ctx.fillRect(pit.left, floorYLevel, pit.right - pit.left, H - floorYLevel);
 
-      // Subtle vertical grid marks spaced evenly
+        // Red cliff edges (drawn deeper into the void for visibility)
+        ctx.fillStyle = '#ff3366';
+        ctx.fillRect(pit.left - 3, floorYLevel, 3, H - floorYLevel);
+        ctx.fillRect(pit.right, floorYLevel, 3, H - floorYLevel);
+
+        // Pit warning text
+        ctx.font = '8px "Press Start 2P"';
+        ctx.fillStyle = 'rgba(255, 51, 102, 0.55)';
+        ctx.fillText('⚠ VOID', pit.left + 8, floorYLevel + 35);
+      });
+
+      // Neon green top line — only on solid ground, skip pits
+      ctx.fillStyle = '#39ff14';
+      let greenStart = 0;
+      pitRegions.forEach(pit => {
+        const pL = Math.max(0, pit.left);
+        const pR = Math.min(W, pit.right);
+        if (pL > greenStart) {
+          ctx.fillRect(greenStart, floorYLevel - 2, pL - greenStart, 4);
+        }
+        greenStart = Math.max(greenStart, pR);
+      });
+      if (greenStart < W) {
+        ctx.fillRect(greenStart, floorYLevel - 2, W - greenStart, 4);
+      }
+
+      // Vertical grid marks — skip pits
       ctx.fillStyle = 'rgba(57, 255, 20, 0.15)';
       for (let gX = 0; gX <= W + 100; gX += 40) {
         const offset = -(distanceTraveledRef.current % 40);
-        ctx.fillRect(gX + offset, floorYLevel + 4, 1, H - floorYLevel - 4);
-      }
-
-      // Pits / Voids
-      obstaclesRef.current.forEach((obs) => {
-        if (obs.type === 'PIT') {
-          ctx.fillStyle = '#0f0f1c';
-          ctx.fillRect(obs.x, floorYLevel, obs.width, H - floorYLevel);
-
-          // Red cliff edges
-          ctx.fillStyle = '#ff3366';
-          ctx.fillRect(obs.x - 3, floorYLevel, 3, H - floorYLevel);
-          ctx.fillRect(obs.x + obs.width, floorYLevel, 3, H - floorYLevel);
-
-          // Pit warning text
-          ctx.font = '8px "Press Start 2P"';
-          ctx.fillStyle = 'rgba(255, 51, 102, 0.45)';
-          ctx.fillText('VOID', obs.x + 14, floorYLevel + 35);
+        const markX = gX + offset;
+        const insidePit = pitRegions.some(p => markX > p.left + 3 && markX < p.right - 3);
+        if (!insidePit) {
+          ctx.fillRect(markX, floorYLevel + 4, 1, H - floorYLevel - 4);
         }
-      });
+      }
     };
     renderFloorWithPits();
 
@@ -1124,15 +1523,49 @@ export default function GameEngine({
       ctx.restore();
     });
 
+    // Drawing Power-ups
+    powerUpsRef.current.forEach((pu) => {
+      if (pu.collected) return;
+      const bobY = Math.sin(timestamp * 0.004 + pu.x * 0.1) * 6;
+      const px = pu.x;
+      const py = pu.y + bobY;
+      // Glow aura
+      const glowGrad = ctx.createRadialGradient(px, py, 4, px, py, 20);
+      glowGrad.addColorStop(0, pu.color);
+      glowGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(px, py, 20, 0, Math.PI * 2);
+      ctx.fill();
+      // Icon background
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.beginPath();
+      ctx.arc(px, py, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = pu.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Icon
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pu.icon, px, py - 1);
+      // Label below
+      ctx.font = '7px "Press Start 2P"';
+      ctx.fillStyle = pu.color;
+      ctx.fillText(pu.label, px, py + 18);
+      ctx.textAlign = 'start';
+    });
+
     // Drawing Obstacles (Wood Crates)
     obstaclesRef.current.forEach((obs) => {
       if (obs.type === 'CRATE' && !obs.isShattered) {
         const boxY = floorYLevel - obs.height;
-        
+
         // Crate body base (Brown wood tone)
         ctx.fillStyle = '#a05a2c';
         ctx.fillRect(obs.x, boxY, obs.width, obs.height);
-        
+
         // Inner borders
         ctx.strokeStyle = '#5a3216';
         ctx.lineWidth = 3;
@@ -1154,6 +1587,75 @@ export default function GameEngine({
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
         ctx.fillRect(obs.x + 2, boxY + 2, 3, 3);
         ctx.fillRect(obs.x + obs.width - 5, boxY + 2, 3, 3);
+      }
+    });
+
+    // Drawing Ceiling Spikes (hanging from top of screen)
+    obstaclesRef.current.forEach((obs) => {
+      if (obs.type === 'CEILING_SPIKE' && !obs.isShattered) {
+        const spikeTipY = obs.height;
+        const spikeCount = Math.max(1, Math.floor(obs.width / 28));
+        const spacing = obs.width / spikeCount;
+        const baseWidth = 22;
+
+        for (let i = 0; i < spikeCount; i++) {
+          const cx = obs.x + i * spacing + spacing / 2;
+          const tipY = spikeTipY + (Math.random() - 0.5) * 12; // slight variation
+
+          // Spike shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.beginPath();
+          ctx.moveTo(cx - baseWidth/2 + 4, 2);
+          ctx.lineTo(cx + 2, tipY + 2);
+          ctx.lineTo(cx + baseWidth/2, 2);
+          ctx.closePath();
+          ctx.fill();
+
+          // Main spike body - dark metallic
+          ctx.fillStyle = '#6b6b7a';
+          ctx.beginPath();
+          ctx.moveTo(cx - baseWidth/2, 0);
+          ctx.lineTo(cx, tipY);
+          ctx.lineTo(cx + baseWidth/2, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          // Lighter edge highlight
+          ctx.fillStyle = '#9a9aae';
+          ctx.beginPath();
+          ctx.moveTo(cx - baseWidth/2, 0);
+          ctx.lineTo(cx, tipY);
+          ctx.lineTo(cx - baseWidth/2 + 4, 0);
+          ctx.closePath();
+          ctx.fill();
+
+          // Blood-red tip
+          const tipGlow = 10 + Math.sin(timestamp * 0.015 + i) * 3;
+          ctx.fillStyle = '#cc2233';
+          ctx.beginPath();
+          ctx.moveTo(cx - 4, tipY - tipGlow);
+          ctx.lineTo(cx, tipY);
+          ctx.lineTo(cx + 4, tipY - tipGlow);
+          ctx.closePath();
+          ctx.fill();
+
+          // Bright red drip point
+          ctx.fillStyle = '#ff3344';
+          ctx.beginPath();
+          ctx.arc(cx, tipY, 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Ceiling mount bracket
+          ctx.fillStyle = '#4a4a58';
+          ctx.fillRect(cx - baseWidth/2 - 2, 0, baseWidth + 4, 5);
+          ctx.fillStyle = '#5a5a6a';
+          ctx.fillRect(cx - baseWidth/2, 0, baseWidth, 4);
+
+          // Bracket bolts
+          ctx.fillStyle = '#333340';
+          ctx.fillRect(cx - baseWidth/2 + 3, 1, 3, 2);
+          ctx.fillRect(cx + baseWidth/2 - 6, 1, 3, 2);
+        }
       }
     });
 
@@ -1310,6 +1812,55 @@ export default function GameEngine({
       }
     }
 
+    // --- DOUBLE JUMP FLASH EFFECT ---
+    if (player.doubleJumpFlash > 0) {
+      const flashAlpha = player.doubleJumpFlash / 12;
+      // Expanding ring
+      const ringRadius = (12 - player.doubleJumpFlash) * 4 + 8;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${flashAlpha * 0.7})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(14, 17, ringRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      // Flash overlay
+      ctx.fillStyle = `rgba(255, 255, 200, ${flashAlpha * 0.15})`;
+      ctx.fillRect(2, 0, 24, player.height);
+    }
+
+    // --- AIR JUMP AVAILABLE INDICATOR ---
+    if (player.airJumpsLeft > 0 && !player.isGrounded) {
+      const bobbleY = Math.sin(timestamp * 0.06) * 3;
+      const isTriple = activePowerUpRef.current === 'TRIPLE_JUMP' && player.airJumpsLeft >= 2;
+      ctx.fillStyle = isTriple ? 'rgba(255, 102, 0, 0.8)' : 'rgba(255, 204, 0, 0.7)';
+      ctx.font = '7px "Press Start 2P"';
+      ctx.textAlign = 'center';
+      ctx.fillText(isTriple ? '⬆⬆⬆' : '⬆⬆', 14, player.height + 12 + bobbleY);
+    }
+
+    // --- ACTIVE POWER-UP VISUALS ---
+    // Star trail: leave sparkles behind player
+    if (activePowerUpRef.current === 'STAR_TRAIL' && player.animationTick % 3 === 0) {
+      particlesRef.current.push({
+        x: player.x + Math.random() * player.width,
+        y: player.y + Math.random() * player.height,
+        vx: -1 - Math.random() * 2,
+        vy: (Math.random() - 0.5) * 2,
+        size: Math.random() * 3 + 1.5,
+        color: Math.random() > 0.5 ? '#ffdd44' : '#ffffff',
+        alpha: 0.8,
+        life: 0.5,
+      });
+    }
+    // Rainbow glow: cycling hue overlay
+    if (activePowerUpRef.current === 'RAINBOW_GLOW') {
+      const hue = (timestamp * 0.3) % 360;
+      ctx.fillStyle = `hsla(${hue}, 80%, 60%, 0.2)`;
+      ctx.fillRect(2, 0, 24, player.height);
+      ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.6)`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(2, 0, 24, player.height);
+    }
+
     ctx.restore();
 
     // Warn if getting pushed backwards close to the edge of death
@@ -1337,8 +1888,8 @@ export default function GameEngine({
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '10px sans-serif';
-    ctx.fillText('空格 / 😐 -> 跳跃', W - 123, 40);
-    ctx.fillText('S 按键 / 😮 -> 护盾', W - 123, 52);
+    ctx.fillText('空格/左键 -> 跳跃', W - 123, 40);
+    ctx.fillText('S/右键 -> 护盾', W - 123, 52);
 
     // Combo display
     if (comboCountRef.current >= 3) {
@@ -1352,46 +1903,99 @@ export default function GameEngine({
       ctx.restore();
     }
 
-    // Milestone display
+    // Shield oxygen bar (bottom-left)
+    const oxy = oxygenRef.current;
+    const barW = 90;
+    const barH = 8;
+    const barX = 10;
+    const barY = H - 28;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+    const oxyColor = oxy > 0.4 ? '#39ff14' : oxy > 0.15 ? '#ffaa00' : '#ff3344';
+    ctx.fillStyle = oxyColor;
+    ctx.fillRect(barX, barY, barW * oxy, barH);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('🛡️ 护盾', barX, barY - 4);
+
+    // Power-up active timer (top-center) — real-time countdown
+    if (activePowerUpRef.current && powerUpExpiryRef.current > Date.now()) {
+      const def = POWERUP_DEFS[activePowerUpRef.current];
+      const secsLeft = Math.max(0, Math.ceil((powerUpExpiryRef.current - Date.now()) / 1000));
+      ctx.save();
+      ctx.font = '10px "Press Start 2P"';
+      ctx.fillStyle = def.color;
+      ctx.shadowColor = def.color;
+      ctx.shadowBlur = 8;
+      ctx.textAlign = 'center';
+      ctx.fillText(`${def.icon} ${def.label} ${secsLeft}s`, W / 2, 105);
+      ctx.restore();
+    }
+
+    // Milestone display with praise message
     if (milestoneAlphaRef.current > 0) {
       const alpha = milestoneAlphaRef.current;
       const scale = 1 + (1 - alpha) * 0.3;
       ctx.save();
       ctx.globalAlpha = alpha;
+
+      // Milestone number
       ctx.font = `bold ${Math.floor(22 * scale)}px "Press Start 2P"`;
       ctx.fillStyle = '#ffcc00';
       ctx.shadowColor = '#ffffff';
       ctx.shadowBlur = 20;
       ctx.textAlign = 'center';
-      ctx.fillText(`${lastMilestoneRef.current * 1000}m!`, W / 2, H / 2 - 40);
+      ctx.fillText(`${lastMilestoneRef.current * 1000}m!`, W / 2, H / 2 - 55);
+
+      // Praise message — colorful text
+      ctx.font = `${Math.floor(11 * scale)}px "Press Start 2P"`;
+      const hue = (lastMilestoneRef.current * 37 + Date.now() * 0.01) % 360;
+      ctx.fillStyle = `hsl(${hue}, 90%, 65%)`;
+      ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+      ctx.shadowBlur = 12;
+      ctx.fillText(praiseMessageRef.current, W / 2, H / 2 - 20);
+
+      // Remaining distance to next milestone
+      const nextMilestone = (lastMilestoneRef.current + 1) * 1000;
+      const remaining = Math.max(0, Math.round(nextMilestone - distanceTraveledRef.current));
+      ctx.font = `${Math.floor(9 * scale)}px "Press Start 2P"`;
+      ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
+      ctx.shadowBlur = 0;
+      ctx.fillText(`→ 距${nextMilestone}m还剩 ${remaining}m`, W / 2, H / 2 + 2);
+
       ctx.restore();
     }
 
-    // Rage mode overlay
-    if (rageModeRef.current > 0) {
-      const rageAlpha = rageModeRef.current > 30 ? 0.15 : (rageModeRef.current / 30) * 0.15;
-      ctx.save();
-      ctx.globalAlpha = rageAlpha;
-      ctx.fillStyle = '#ff4400';
+    // Pause overlay
+    if (pausedRef.current) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
       ctx.fillRect(0, 0, W, H);
-      ctx.restore();
-      ctx.save();
-      ctx.font = '12px "Press Start 2P"';
-      ctx.fillStyle = '#ff4400';
-      ctx.shadowColor = '#ff8800';
-      ctx.shadowBlur = 20;
+      ctx.font = '20px "Press Start 2P"';
+      ctx.fillStyle = '#ffcc00';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 16;
       ctx.textAlign = 'center';
-      ctx.fillText('RAGE MODE!', W / 2, H / 2 + 50);
-      ctx.restore();
+      ctx.fillText('⏸ 暂停中', W / 2, H / 2);
+      ctx.font = '9px "Press Start 2P"';
+      ctx.fillStyle = '#aaa';
+      ctx.shadowBlur = 0;
+      ctx.fillText('按 ESC 继续', W / 2, H / 2 + 30);
     }
 
     // Tick loop forward
     gameLoopIdRef.current = requestAnimationFrame(runGameTick);
   }
 
-  function triggerDeathState(reason: 'crushed' | 'fell') {
+  function triggerDeathState(reason: 'crushed' | 'fell' | 'impaled') {
     stopGameLoop();
-    audio.playDeath();
+    if (reason === 'impaled') {
+      audio.playImpale();
+    } else {
+      audio.playDeath();
+    }
     
     // Save new high score in localStorage
     const finalScore = scoreRef.current;
@@ -1517,10 +2121,11 @@ export default function GameEngine({
               <span>🎮 操作支持说明</span>
               <button onClick={() => setUseKeyboardHelp(false)} className="mx-1 text-zinc-500 hover:text-white px-1">✕</button>
             </div>
-            <p className="leading-snug">识别延迟或无镜头时，欢迎采用键盘或点击：</p>
+            <p className="leading-snug">识别延迟或无镜头时，欢迎用以下方式操控：</p>
             <ul className="list-disc pl-4 space-y-0.5 text-zinc-300">
-              <li><b className="text-white">笑脸 😀 / [空格键]</b> ➔ 控制跳跃越过虚空与木箱。</li>
-              <li><b className="text-white">惊讶 😮 / [ S 键] (需长按)</b> ➔ 展开护盾可以撞碎木箱，化险为夷。</li>
+              <li><b className="text-white">😀 / [空格] / 鼠标左键</b> ➔ 跳跃越过虚空与木箱。</li>
+              <li><b className="text-white">😮 / [S键] / 鼠标右键(按住)</b> ➔ 护盾撞碎木箱，右键松开即关闭。</li>
+              <li className="text-zinc-500 text-[10px]">🖱️ <b className="text-zinc-400">[ESC]</b> 暂停 &nbsp;|&nbsp; 右键菜单已禁用</li>
             </ul>
           </div>
         )}

@@ -13,7 +13,7 @@ export interface CalibrationConfig {
   isCalibrated: boolean;
 }
 
-export type ObstacleType = 'CRATE' | 'PIT';
+export type ObstacleType = 'CRATE' | 'PIT' | 'CEILING_SPIKE';
 
 export interface Obstacle {
   id: string;
@@ -31,6 +31,26 @@ export interface Coin {
   y: number;
   collected: boolean;
 }
+
+export type PowerUpType = 'TRIPLE_JUMP' | 'MAGNET' | 'RAINBOW_GLOW' | 'STAR_TRAIL';
+
+export interface PowerUp {
+  id: string;
+  type: PowerUpType;
+  x: number;
+  y: number;
+  collected: boolean;
+  icon: string;
+  label: string;
+  color: string;
+}
+
+export const POWERUP_DEFS: Record<PowerUpType, { icon: string; label: string; color: string; durationSec: number; isFun: boolean }> = {
+  TRIPLE_JUMP:   { icon: '🔥', label: '三连跳',   color: '#ff6600', durationSec: 15, isFun: false },
+  MAGNET:        { icon: '🧲', label: '磁铁',     color: '#4488ff', durationSec: 30, isFun: false },
+  RAINBOW_GLOW:  { icon: '🌈', label: '彩虹光',   color: '#ff4488', durationSec: 15, isFun: true },
+  STAR_TRAIL:    { icon: '✨', label: '星尘尾迹', color: '#ffcc00', durationSec: 15, isFun: true },
+};
 
 export interface Particle {
   x: number;
@@ -89,6 +109,7 @@ export interface LeaderboardEntry {
   coins: number;
   title: string;
   date: string;
+  time: string;
 }
 
 export interface ExpressionRecord {
