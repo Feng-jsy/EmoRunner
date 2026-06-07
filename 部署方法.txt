@@ -1,0 +1,115 @@
+============================================
+  情绪闯关 EmoRunner - 部署与运行指南
+  版本: v2.26 | 更新: 2026-06-07
+============================================
+
+【一、环境要求】
+  - Node.js >= 18.x（推荐 20.x LTS）
+  - npm >= 9.x（随 Node.js 自带）
+  - 现代浏览器（推荐 Google Chrome 90+ 以获得最佳体验）
+  - 摄像头设备（可选，游戏也支持键盘操控）
+
+  ⚠ 推荐使用 Google Chrome 浏览器打开和游玩本游戏。
+     Chrome 对 WebRTC/getUserMedia 摄像头 API 和 Web Audio API
+     的兼容性最好，面部识别延迟最低。
+
+【二、快速开始（本地开发）】
+
+  1. 安装依赖
+     npm install
+
+  2. 启动开发服务器
+     npm run dev
+     → 浏览器访问 http://localhost:3000（端口被占用时自动递增）
+
+  3. 其他命令
+     npm run build      → 构建生产包到 dist/ 目录
+     npm run preview    → 本地预览生产构建（需先 build）
+     npm run lint       → TypeScript 类型检查
+     npm run clean      → 清理构建产物
+
+【三、生产部署】
+
+  方式一：静态站点托管（推荐）
+  ---------------------------------------
+  项目是纯前端应用，构建产物为纯静态文件（HTML/CSS/JS）。
+  兼容所有主流静态托管平台：
+
+  1. 构建项目
+     npm run build
+
+  2. 部署 dist/ 目录到任意静态托管服务：
+     - Vercel:        vercel --prod
+     - Netlify:       netlify deploy --prod --dir=dist
+     - GitHub Pages:  推送 dist/ 到 gh-pages 分支
+     - Cloudflare Pages: 连接仓库，设置构建命令 npm run build
+     - Nginx/Apache:  直接将 dist/ 文件复制到 web 根目录
+     - 任意静态服务器: npx serve dist
+
+  方式二：离线版本（无需 Node.js）
+  ---------------------------------------
+  离线文件夹暂未包含在当前版本中。如需离线部署，执行 npm run build
+  后将 dist/ 目录部署到任意静态服务器（参考上方方式一）。
+
+【四、环境变量说明】
+
+  本项目不需要任何环境变量即可运行。
+  - 人脸追踪通过 MediaPipe 库在浏览器端完成，无需后端服务
+  - 游戏数据（最高分、金币、皮肤、成就、排行榜、表情图鉴、校准参数等）存储在浏览器 localStorage
+  - 无后端 API 调用，无数据上传
+
+【五、HTTPS 注意事项】
+
+  摄像头 API（getUserMedia）要求页面必须通过 HTTPS 或 localhost 访问。
+  - 本地开发（localhost）→ 自动允许
+  - 生产部署 → 确保使用 HTTPS，否则摄像头无法启动
+  - 所有主流托管平台（Vercel/Netlify/Cloudflare）默认提供 HTTPS
+  - 摄像头不可用时，游戏自动降级为纯键盘模式（空格=跳跃，S=护盾）
+
+【六、浏览器兼容性】
+
+  核心依赖 MediaPipe FaceMesh 通过 CDN 动态加载。
+  支持的浏览器：
+    Google Chrome 90+   → 完全支持（推荐）
+    Edge 90+             → 完全支持
+    Firefox 90+          → 完全支持
+    Safari 15+           → 部分支持（需检查摄像头权限设置）
+    移动端浏览器          → 支持，但性能因设备而异
+
+  注意：CDN 脚本在中国大陆可能加载较慢。
+
+【七、故障排查】
+
+  问题：npm install 失败
+  → 检查 Node.js 版本 >= 18
+  → 尝试清除缓存: npm cache clean --force
+  → 删除 node_modules 和 package-lock.json 后重试
+
+  问题：开发服务器无法启动（端口占用）
+  → Vite 会自动尝试下一个端口，无需手动修改
+
+  问题：摄像头无法打开
+  → 确认使用 Google Chrome 浏览器
+  → 确认浏览器已授予摄像头权限（地址栏左侧图标）
+  → 确认使用 HTTPS 或 localhost
+  → 确认摄像头未被其他应用占用
+  → 可用 [空格键] + [S键] 纯键盘模式游玩
+
+  问题：面部识别不灵敏
+  → 进入"面部表情校准实验室"重新校准
+  → 确保面部光线充足，避免背光
+  → 保持面部在摄像头画面中央
+
+  问题：构建后白屏
+  → 检查 dist/ 目录是否存在 index.html
+  → 检查静态服务器是否正确配置（所有路由指向 index.html）
+
+【八、项目文件大小】
+
+  开发环境:
+    node_modules/     ~175 MB
+    源代码 src/       ~140 KB
+
+  生产构建:
+    dist/ 目录        ~356 KB
+    MediaPipe 模型    ~17 MB（由 CDN 动态加载）

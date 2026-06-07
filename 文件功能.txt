@@ -1,0 +1,256 @@
+============================================
+  情绪闯关 EmoRunner - 项目文件功能详解
+  版本: v2.26 | 更新: 2026-06-07
+============================================
+
+【一、根目录 - 项目配置文件】
+
+  package.json
+  ├─ 项目依赖与脚本定义中心
+  ├─ 声明 3 个运行时依赖: React 19, Lucide 图标, Motion 动效
+  ├─ 声明 2 个构建插件: TailwindCSS Vite, React Vite 插件
+  ├─ 声明 7 个开发依赖: TypeScript, Vite, esbuild, autoprefixer 等
+  └─ 定义 5 个便捷脚本: dev / build / preview / clean / lint
+
+  package-lock.json
+  ├─ 依赖版本锁定文件（自动生成，勿手动编辑）
+  └─ 确保所有环境安装完全相同的依赖版本
+
+  vite.config.ts
+  ├─ Vite 构建工具核心配置
+  ├─ 注册 @vitejs/plugin-react（React JSX 编译）
+  ├─ 注册 @tailwindcss/vite（Tailwind CSS 按需生成）
+  ├─ 配置 `@` 路径别名指向项目根目录
+  └─ DISABLE_HMR 环境变量控制热更新开关
+
+  tsconfig.json
+  ├─ TypeScript 编译规则文件
+  ├─ 规范类型检查严格度、模块解析策略
+  └─ 影响编辑器智能提示与 npm run lint 行为
+
+  metadata.json
+  ├─ 应用元数据描述文件（AI Studio 兼容）
+  └─ 声明应用名称、摄像头权限等
+
+  index.html
+  ├─ 单页面应用入口 HTML
+  ├─ <div id="root"> → React 组件挂载点
+  ├─ 引入 Google Fonts: "Press Start 2P"（8-bit 像素字体）+ "Inter"（正文）
+  ├─ 通过 jsDelivr CDN 加载 MediaPipe FaceMesh 面部识别库
+  └─ <body> 应用全局暗色背景样式
+
+  .gitignore
+  ├─ Git 忽略规则
+  └─ 排除 node_modules/、dist/、.env 等
+
+【二、src/ 目录 - 源代码（总计 ~4572 行）】
+
+  src/main.tsx (10 行)
+  ├─ React 应用入口文件
+  ├─ 引入全局 CSS (index.css)
+  └─ 以 StrictMode 包裹渲染 <App />
+
+  src/index.css (102 行)
+  ├─ 全局样式文件
+  ├─ @import "tailwindcss" → 引入 Tailwind CSS 4
+  ├─ @theme 自定义设计令牌: 8 种复古配色 + 2 套字体
+  ├─ 霓虹发光效果 (.neon-glow-green/blue/red)
+  ├─ 像素边框样式 (.pixel-border)
+  └─ [data-theme="light"] 浅色模式 CSS 覆盖（50+ 条规则）
+
+  src/types.ts (233 行)
+  ├─ TypeScript 类型定义中心
+  ├─ GameState: 'MENU' | 'CALIBRATION' | 'PRELOADING' | 'PLAYING' | 'GAMEOVER'
+  ├─ CalibrationConfig: 校准参数（中性值、阈值、状态）
+  ├─ Obstacle / ObstacleType: 障碍物定义（CRATE / PIT / CEILING_SPIKE）
+  ├─ Coin / Coin: 金币实体数据
+  ├─ PowerUp / PowerUpType: 道具系统（三连跳 / 磁铁 / 彩虹光 / 星尘尾迹）
+  ├─ POWERUP_DEFS: 道具参数（图标、标签、颜色、持续时间、是否为趣味道具）
+  ├─ Particle: 粒子碎片数据
+  ├─ Skin / SkinId / SHOP_SKINS: 4 款西装皮肤定义
+  ├─ Achievement / ACHIEVEMENTS: 14 项成就系统
+  ├─ DailyChallenge / CHALLENGE_POOL: 每日挑战系统
+  ├─ MiniObjective / MINI_OBJECTIVE_POOL: 局内随机小目标（12 种）
+  ├─ LeaderboardEntry: 本地排行榜条目
+  ├─ ExpressionRecord: 表情收集图鉴记录
+  ├─ EmotionTitle / getEmotionTitle(): 情绪称号逻辑
+  ├─ AchievementStats: 累计统计数据
+  └─ STORAGE_KEYS: localStorage 键名常量（11 项，theme 键另存）
+
+  src/App.tsx (888 行)
+  ├─ 应用顶层根组件（全局状态大脑）
+  ├─ 管理 20+ 个核心状态:
+  │   gameState / calibrationConfig → 页面路由 + 校准参数
+  │   smileLevel / surpriseLevel → 实时表情追踪值
+  │   totalCoins / equippedSkin / ownedSkins → 商店系统
+  │   theme → 深色/浅色主题切换
+  │   unlockedAchievements / totalStats → 成就系统
+  │   dailyChallenge → 每日挑战
+  │   lastScore / lastCoins / lastEmotionTitle → 结算页
+  │   playerName / leaderboard → 本地排行榜 + 玩家ID
+  │   expressionRecords → 表情收集图鉴
+  ├─ 根据 gameState 条件渲染 4 个视图
+  ├─ 皮肤商店弹窗（购买/装备）
+  ├─ 成就系统弹窗（14 项进度展示）
+  ├─ 死亡结算页（战绩统计 + 截图导出）
+  ├─ 排行榜同ID高分覆盖逻辑
+  ├─ 表情图鉴记录保存（每局一条，上限50条）
+  ├─ 全局深浅主题切换按钮
+  └─ 清除所有本地数据功能
+
+【三、src/components/ - 功能组件】
+
+  MainMenu.tsx (421 行)
+  ├─ 游戏启动画面，玩家第一界面
+  ├─ 显示 8-bit 像素风格标题 "情绪闯关 EmoRunner"（渐变金色动画）
+  ├─ 两张核心功能卡片:
+  │   [01] 主线闯关模式 → 直接开始游戏
+  │   [02] 面部表情校准实验室 → 个性化调校阈值
+  ├─ 玩家ID输入框（最多8字，默认"打工人"）
+  ├─ 金币商店入口（含硬币余额 + 皮肤购买）
+  ├─ 表情收集图鉴入口（显示记录总数）
+  ├─ 成就系统入口（显示已解锁数量）
+  ├─ 每日挑战卡片（日期种子随机生成）
+  ├─ 本地排行榜面板（前10名，奖牌图标，当前玩家高亮）
+  ├─ 表情图鉴弹窗（按玩家ID汇总 + 对局记录列表）
+  ├─ 全局深浅主题切换
+  ├─ 备用键盘操作说明
+  └─ 清除所有本地数据按钮
+
+  CameraTracker.tsx (437 行)
+  ├─ 面部表情实时追踪核心模块
+  ├─ 加载流程: CDN 轮询 → 请求摄像头 → 初始化 FaceMesh
+  ├─ 基于 MediaPipe FaceMesh 468 点人脸关键点模型
+  ├─ 计算两个表情指标:
+  │   笑脸 (smile): 嘴角宽度 / 面部高度 → 控制跳跃
+  │   惊讶 (surprise): 嘴唇张开高度 / 面部高度 → 控制护盾
+  ├─ EMA 指数平滑滤波（alpha=0.25）减少数据抖动
+  ├─ 迟滞阈值: 激活=满阈值，解除=0.7x 阈值（防抖）
+  ├─ 双重触发冲突仲裁: 比较 ratio/threshold 强度，选强者
+  ├─ Canvas 绘制镜像画面 + 面部关键点像素叠加层
+  ├─ 实时 HUD 进度条显示当前值 vs 阈值
+  ├─ 4 种加载状态处理: LOADING / WAITING / READY / ERROR
+  └─ 退出时自动释放摄像头资源
+
+  CalibrationMenu.tsx (325 行)
+  ├─ 三步面部校准引导向导
+  ├─ 步骤流程:
+  │   第一步 NEUTRAL  → 捕获平静基准（中性表情数值）
+  │   第二步 SMILE    → 捕获微笑值，计算跳跃阈值
+  │   第三步 SURPRISE → 捕获惊讶值，计算护盾阈值
+  │   第四步 DONE     → 校准完成，保存并开始
+  ├─ 阈值计算算法: neutral + (active - neutral) * 0.55
+  ├─ 实时显示传感器数据供用户参考
+  ├─ 内置 CameraTracker 实时预览
+  └─ 保存配置到 App 状态 + localStorage 持久化
+
+  GameEngine.tsx (2156 行)
+  ├─ 核心 2D 横版闯关游戏逻辑
+  ├─ Canvas 渲染引擎（requestAnimationFrame 60fps 游戏循环）
+  ├─ 物理系统:
+  │   重力模拟 (gravity: 0.05)
+  │   玩家跳跃 (vy: -4.0)
+  │   地面碰撞检测 (floorYLevel = H * 0.82)
+  │   深坑坠落判定
+  ├─ 障碍物系统:
+  │   木箱 (CRATE): AABB 碰撞检测，护盾撞碎 + 粒子碎片
+  │   深坑 (PIT): 玩家落入即死，红色边缘警告
+  │   天花板尖刺 (CEILING_SPIKE): 从上方下落的尖刺障碍
+  │   巨型木箱 (52x58): 撞碎 +5 分奖励
+  │   组合关卡: 坑+箱 / 金币弧线 / 木箱墙
+  ├─ 道具系统 (PowerUp):
+  │   三连跳 (TRIPLE_JUMP): 空中可跳跃2次，持续15秒
+  │   磁铁 (MAGNET): 自动吸引附近金币，持续30秒
+  │   彩虹光 (RAINBOW_GLOW): 趣味特效道具，持续15秒
+  │   星尘尾迹 (STAR_TRAIL): 趣味尾迹特效，持续15秒
+  │   道具按权重随机生成，拾取后激活，到期自动失效
+  ├─ 金币收集: 旋转椭圆硬币动画 + 碰撞检测
+  ├─ 粒子系统: 木箱碎裂碎片 + 金币拾取星点
+  ├─ 场景渲染:
+  │   实线霓虹地面 + 垂直网格标记
+  │   西装商务男角色（9 部件绘制: 头/发/脸/眼镜/领/领带/夹克/皮带/裤/鞋）
+  │   护盾能量场特效（脉冲光环）
+  │   跑动/跳跃/下落三态动画
+  ├─ 3 大情绪分区（每 2000m 轮换）:
+  │   🌟 自信区 / 😰 焦虑区 / 💥 爆发区
+  │   各区障碍生成比例不同，背景色平滑渐变过渡
+  ├─ 连击系统: 连续撞碎木箱累计 combo，得分翻倍
+  ├─ 惊喜事件:
+  │   金币雨（4 种几何排列: 弧线/菱形/波浪/螺旋）
+  │   巨型木箱（低概率）
+  │   暴走模式（180 帧自动撞碎 + 红色滤镜）
+  ├─ 首次金币雨彩蛋: 硬币像素排列版本号
+  ├─ 里程碑播报: 每 1000m 金色大字闪烁 1 秒
+  ├─ 局内小目标: 每局随机任务（收集/撞碎/跳跃/奔跑）
+  ├─ 表情采样: 每30帧记录笑脸/惊讶值，上升沿检测触发次数
+  ├─ 音效引擎 (RetroAudioEngine):
+  │   Web Audio API 8-bit 合成音效
+  │   5 种音效: 跳跃 / 护盾 / 撞碎 / 金币 / 死亡
+  ├─ 键盘备用: 空格/↑=跳跃 / S/↓=护盾
+  ├─ 开局操作说明 5 秒自动淡出
+  ├─ 难度递增: 速度随距离渐进加速
+  └─ 最高分 localStorage 持久化
+
+【四、依赖库说明】
+
+  运行时依赖:
+  ┌─────────────────────┬──────────────────────────────────┐
+  │ react / react-dom    │ UI 框架，组件化构建界面          │
+  │ lucide-react         │ SVG 图标库（游戏 UI 图标）      │
+  │ motion               │ 动画库（淡入淡出、弹性动画）    │
+  └─────────────────────┴──────────────────────────────────┘
+
+  构建插件:
+  ┌─────────────────────┬──────────────────────────────────┐
+  │ @tailwindcss/vite    │ Tailwind CSS 4 Vite 集成        │
+  │ @vitejs/plugin-react │ React JSX/TSX 编译              │
+  └─────────────────────┴──────────────────────────────────┘
+
+  CDN 外部脚本:
+  ┌───────────────────────────────────┬─────────────────────┐
+  │ MediaPipe FaceMesh                │ 468点人脸关键点检测  │
+  │ MediaPipe Camera Utils            │ 摄像头帧采集工具     │
+  │ Google Fonts: Press Start 2P+Inter│ 像素字体 + 正文字体  │
+  └───────────────────────────────────┴─────────────────────┘
+
+【五、数据流架构】
+
+  CameraTracker (人脸数据采集)
+       │
+       │ smileLevel, surpriseLevel
+       ▼
+  App.tsx (中央状态管理)
+       │
+       ├──▶ GameEngine (游戏逻辑)
+       │      ├── 表情值映射为跳跃/护盾动作
+       │      ├── 键盘事件作为备用输入
+       │      ├── 每30帧采样表情数据用于图鉴
+       │      └── 返回: score, coins, shattered, jumps, maxCombo, expressionStats → onGameOver()
+       │
+       ├──▶ CalibrationMenu (校准流程)
+       │      └── 返回: CalibrationConfig → handleSaveCalibration()
+       │
+       └──▶ localStorage (数据持久化)
+              ├── emotion_run_calibration_config → 校准参数
+              ├── retro_run_highscore → 历史最高分
+              ├── emotion_run_total_coins → 累计硬币
+              ├── emotion_run_owned_skins → 已拥有皮肤
+              ├── emotion_run_equipped_skin → 当前装备皮肤
+              ├── emotion_run_achievements → 已解锁成就
+              ├── emotion_run_total_stats → 累计统计数据
+              ├── emotion_run_daily_challenge → 每日挑战
+              ├── emotion_run_leaderboard → 本地排行榜（Top 20）
+              ├── emotion_run_player_name → 玩家ID
+              ├── emotion_run_expression_records → 表情图鉴（上限50条）
+              └── emotion_run_theme → 深浅主题偏好（裸键，不在 STORAGE_KEYS 中）
+
+【六、关键技术特点】
+
+  1. 全本地计算: 人脸识别在浏览器端完成，不向服务器发送任何数据
+  2. 面部识别优化: EMA 平滑 + 迟滞阈值 + 冲突仲裁三重防抖
+  3. 双输入模式: 摄像头表情识别 + 键盘备用操控
+  4. 个性化校准: 每个用户可定制自己的面部表情阈值
+  5. 8-bit 音效: 纯 Web Audio API 合成，无需音频文件
+  6. 深浅主题: 一键切换，CSS 变量全覆盖 50+ 组件
+  7. 道具系统: 三连跳、磁铁、彩虹光、星尘尾迹 4 种增益道具
+  8. 数据持久化: 12 项 localStorage 键值，金币/皮肤/成就/排行榜/图鉴全部本地存储
