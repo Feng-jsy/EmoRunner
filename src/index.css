@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-press-start: "Press Start 2P", monospace;
+
+  --color-retro-bg: #12121f;
+  --color-retro-card: #1a1a2e;
+  --color-retro-gold: #ffcc00;
+  --color-retro-green: #39ff14;
+  --color-retro-blue: #00ffff;
+  --color-retro-red: #ff3366;
+  --color-retro-amber: #ffaa00;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    image-rendering: pixelated;
+  }
+}
+
+
+.neon-glow-green {
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.5), inset 0 0 10px rgba(57, 255, 20, 0.3);
+  text-shadow: 0 0 5px rgba(57, 255, 20, 0.7);
+}
+
+.neon-glow-blue {
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.3);
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.7);
+}
+
+.neon-glow-red {
+  box-shadow: 0 0 10px rgba(255, 51, 102, 0.5), inset 0 0 10px rgba(255, 51, 102, 0.3);
+  text-shadow: 0 0 5px rgba(255, 51, 102, 0.7);
+}
+
+.pixel-border {
+  border: 4px solid #fff;
+  border-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><rect x='0' y='0' width='12' height='12' fill='%231a1a2e'/><rect x='4' y='4' width='4' height='4' fill='%23ffffff'/></svg>") 4 repeat;
+}
+
+/* ===== LIGHT MODE OVERRIDES ===== */
+/* Same-element selector for root container */
+[data-theme="light"].bg-\[\#0d0d16\] { background-color: #eeeff3 !important; }
+[data-theme="light"].text-\[\#e2e2ea\] { color: #1a1a2e !important; }
+/* Child selectors for nested components */
+[data-theme="light"] .bg-\[\#0d0d16\] { background-color: #eeeff3 !important; }
+[data-theme="light"] .bg-\[\#12121f\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#141424\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#1a1a2e\] { background-color: #f5f5fa !important; }
+[data-theme="light"] .bg-\[\#1b1b32\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#121221\] { background-color: #f5f5fa !important; }
+[data-theme="light"] .bg-\[\#161626\] { background-color: #f8f8fc !important; }
+[data-theme="light"] .bg-\[\#111119\] { background-color: #f0f0f5 !important; }
+[data-theme="light"] .bg-\[\#161623\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#19192b\] { background-color: #f8f8fc !important; }
+[data-theme="light"] .bg-\[\#10101c\] { background-color: #f0f0f5 !important; }
+[data-theme="light"] .bg-\[\#1f1e38\] { background-color: #f0f0f5 !important; }
+[data-theme="light"] .bg-\[\#1e2f2e\] { background-color: #e8f0e8 !important; }
+[data-theme="light"] .bg-\[\#2f271e\] { background-color: #f5f0e8 !important; }
+[data-theme="light"] .bg-\[\#181216\] { background-color: #fff0f0 !important; }
+[data-theme="light"] .bg-\[\#24171d\] { background-color: #ffe8e8 !important; }
+[data-theme="light"] .bg-\[\#1d1c2b\] { background-color: #e8e8f5 !important; }
+[data-theme="light"] .bg-\[\#0f0f1c\] { background-color: #f0f0f5 !important; }
+
+[data-theme="light"] .hover\:bg-zinc-800:hover { background-color: #e0e0e8 !important; }
+[data-theme="light"] .hover\:bg-zinc-700:hover { background-color: #d8d8e0 !important; }
+[data-theme="light"] .hover\:bg-\[\#22223a\]:hover { background-color: #e8e8f0 !important; }
+
+[data-theme="light"] .text-\[\#e2e2ea\] { color: #1a1a2e !important; }
+[data-theme="light"] .text-\[\#e0e0ea\] { color: #1a1a2e !important; }
+
+[data-theme="light"] .text-zinc-700 { color: #9999aa !important; }
+[data-theme="light"] .hover\:text-zinc-200:hover { color: #1a1a2e !important; }
+[data-theme="light"] .hover\:text-white:hover { color: #1a1a2e !important; }
+[data-theme="light"] .hover\:text-zinc-500:hover { color: #555570 !important; }
+[data-theme="light"] .hover\:text-cyan-400:hover { color: #006688 !important; }
+
+[data-theme="light"] .border-zinc-900 { border-color: #d8d8e0 !important; }
+[data-theme="light"] .border-zinc-800 { border-color: #e0e0e8 !important; }
+[data-theme="light"] .border-zinc-700 { border-color: #d0d0d8 !important; }
+[data-theme="light"] .border-zinc-950 { border-color: #d0d0d8 !important; }
+
+[data-theme="light"] .text-zinc-400 { color: #555570 !important; }
+[data-theme="light"] .text-zinc-500 { color: #666680 !important; }
+[data-theme="light"] .text-zinc-600 { color: #777790 !important; }
+[data-theme="light"] .text-zinc-300 { color: #3a3a50 !important; }
+[data-theme="light"] .text-zinc-200 { color: #2a2a40 !important; }
+
+[data-theme="light"] .bg-zinc-950\/60 { background-color: rgba(240, 240, 245, 0.6) !important; }
+[data-theme="light"] .bg-zinc-950\/80 { background-color: rgba(240, 240, 245, 0.8) !important; }
+[data-theme="light"] .bg-zinc-900\/60 { background-color: rgba(230, 230, 240, 0.6) !important; }
+[data-theme="light"] .bg-zinc-800 { background-color: #e8e8f0 !important; }
+[data-theme="light"] .bg-zinc-805 { background-color: #e0e0e8 !important; }
+
+[data-theme="light"] .bg-black\/60 { background-color: rgba(0, 0, 0, 0.04) !important; }
+[data-theme="light"] .bg-black\/75 { background-color: rgba(0, 0, 0, 0.08) !important; }
+[data-theme="light"] .bg-black\/80 { background-color: rgba(0, 0, 0, 0.08) !important; }
+[data-theme="light"] .bg-red-950\/60 { background-color: #ffe8e8 !important; }
+

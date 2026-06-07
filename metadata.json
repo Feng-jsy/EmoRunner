@@ -1,0 +1,6 @@
+{
+  "name": "情绪闯关 EmoRunner",
+  "description": "一款通过摄像头识别人脸表情（笑脸跳跃、惊讶护盾）控制的2D像素风格像素闯关网页小游戏",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
