@@ -343,7 +343,7 @@ export default function GameEngine({
   const milestoneAlphaRef = useRef<number>(0);
   const milestoneTimestampRef = useRef<number>(0); // for 4s fade-in/out timing
   const praiseMessageRef = useRef<string>('');
-  const coinRainPhaseRef = useRef<number>(0); // 0="v2.30", 1="hello~", 2+=random
+  const coinRainPhaseRef = useRef<number>(0); // 0="v2.38", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
@@ -1091,7 +1091,7 @@ export default function GameEngine({
       const coinSize = 10;
 
       if (coinRainPhaseRef.current === 0) {
-        // First rain: spell out "v2.30"
+        // First rain: spell out "v2.38"
         coinRainPhaseRef.current = 1;
         const startX = W + 20;
         const startY = 100;
@@ -1099,13 +1099,13 @@ export default function GameEngine({
         const char2  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,3],[4,2],[5,1],[6,0],[6,1],[6,2],[6,3],[6,4]];
         const charDot = [[4,1],[5,1]];
         const char3  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
-        const char0  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const char8  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,1],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
         const chars: [number, number, number[][]][] = [
           [0, 0, charV],
           [6, 0, char2],
           [13, 0, charDot],
           [19, 0, char3],
-          [26, 0, char0],
+          [26, 0, char8],
         ];
         let id = 0;
         chars.forEach(([colOffset, _rowOffset, bitmap]) => {
@@ -1348,9 +1348,6 @@ export default function GameEngine({
               if (comboCountRef.current > maxComboRef.current) {
                 maxComboRef.current = comboCountRef.current;
               }
-              // Shield shatter costs extra oxygen (bigger crate = more drain)
-              const crateCost = obs.width > 45 ? GAME_BALANCE.shieldCostLargeCrate : obs.width > 32 ? GAME_BALANCE.shieldCostMediumCrate : GAME_BALANCE.shieldCostSmallCrate;
-              oxygenRef.current = Math.max(0, oxygenRef.current - crateCost);
               makeShatterParticles(obs.x, oxTop, '#a05a2c');
               audio.playBlockShatter();
               if (obs.width > 40) {
@@ -1382,9 +1379,7 @@ export default function GameEngine({
         // Player head enters the spike zone
         if (pxRight > sxLeft + 4 && pxLeft < sxRight - 4 && pxTop <= sxBottom) {
           if (player.shieldActive) {
-            // Shield shatters the spike, but costs oxygen
             obs.isShattered = true;
-            oxygenRef.current = Math.max(0, oxygenRef.current - GAME_BALANCE.shieldCostCeilingSpike);
             makeShatterParticles(obs.x + obs.width / 2, sxBottom, '#8a8a9a');
             audio.playBlockShatter();
           } else {
