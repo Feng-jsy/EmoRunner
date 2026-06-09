@@ -343,7 +343,7 @@ export default function GameEngine({
   const milestoneAlphaRef = useRef<number>(0);
   const milestoneTimestampRef = useRef<number>(0); // for 4s fade-in/out timing
   const praiseMessageRef = useRef<string>('');
-  const coinRainPhaseRef = useRef<number>(0); // 0="v2.38", 1="hello~", 2+=random
+  const coinRainPhaseRef = useRef<number>(0); // 0="v2.39", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
@@ -1037,8 +1037,7 @@ export default function GameEngine({
           for (let g = 0; g < guideCoinCount; g++) {
             const t = (g + 1) / (guideCoinCount + 1); // 0.25, 0.5, 0.75
             const xOff = t * pitW;
-            // Parabola: y = 4*h*t*(1-t), peaks at 75px
-            const yOff = 4 * 70 * t * (1 - t);
+            const yOff = 4 * 145 * t * (1 - t); // jump peak ~160px
             coinsListRef.current.push({
               id: `coin_${Date.now()}_${g}`,
               x: W + 20 + xOff,
@@ -1050,8 +1049,8 @@ export default function GameEngine({
       } else if (rand < coinThreshold) {
         // Jump-arc coin trail: parabolic pattern = natural jump trajectory
         const coinCount = 5 + Math.floor(Math.random() * 4); // 5-8 coins
-        const arcSpanX = 120 + Math.random() * 80;
-        const arcPeakY = 65 + Math.random() * 55; // peak height above ground
+        const arcSpanX = 200 + Math.random() * 120; // jump covers ~240px at speed 1.5
+        const arcPeakY = 140 + Math.random() * 35; // matches jump peak ~160px
         for (let i = 0; i < coinCount; i++) {
           const t = i / (coinCount - 1); // 0 → 1
           const xOff = t * arcSpanX;
@@ -1091,7 +1090,7 @@ export default function GameEngine({
       const coinSize = 10;
 
       if (coinRainPhaseRef.current === 0) {
-        // First rain: spell out "v2.38"
+        // First rain: spell out "v2.39"
         coinRainPhaseRef.current = 1;
         const startX = W + 20;
         const startY = 100;
@@ -1100,12 +1099,13 @@ export default function GameEngine({
         const charDot = [[4,1],[5,1]];
         const char3  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
         const char8  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,1],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const char9  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,1],[3,2],[3,3],[4,4],[5,4],[6,1],[6,2],[6,3]];
         const chars: [number, number, number[][]][] = [
           [0, 0, charV],
           [6, 0, char2],
           [13, 0, charDot],
           [19, 0, char3],
-          [26, 0, char8],
+          [26, 0, char9],
         ];
         let id = 0;
         chars.forEach(([colOffset, _rowOffset, bitmap]) => {
@@ -1330,12 +1330,16 @@ export default function GameEngine({
         }
 
         // Side collision: only when NOT standing on this crate
+        // and only when approaching from the left side (not falling off right edge)
         if (!feetOnCrate) {
+          const playerCenter = player.x + player.width / 2;
+          const crateCenter = obs.x + obs.width / 2;
           const sideCollision = (
             pxLeft < oxRight &&
             pxRight > oxLeft &&
             pxTop < oxBottom &&
-            pxBottom > oxTop + 6
+            pxBottom > oxTop + 6 &&
+            playerCenter < crateCenter
           );
 
           if (sideCollision) {
