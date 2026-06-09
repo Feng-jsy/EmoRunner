@@ -865,10 +865,34 @@ export default function GameEngine({
         const playerCenter = player.x + player.width / 2;
         const pitLeft = obs.x;
         const pitRight = obs.x + obs.width;
-        
+
         // If the player center is over the empty mouth of the pit, they fall into the void:
         if (playerCenter > pitLeft + 3 && playerCenter < pitRight - 3) {
           isInPitSector = true;
+        }
+
+        // Pit wall collision: solid walls at ground level (no clipping through pit sides)
+        const atGround = player.y >= floorYLevel - player.height - 4;
+        if (atGround && !isInPitSector) {
+          const pxRight = player.x + player.width;
+          // Left wall: player walks into pit from left
+          if (pxRight > pitLeft + 4 && playerCenter <= pitLeft + 8) {
+            player.x = pitLeft - player.width;
+            player.pushedAlertTick = 12;
+            if (player.x < GAME_BALANCE.playerDeathEdgeX) {
+              triggerDeathState('crushed');
+              return;
+            }
+          }
+          // Right wall: player walks into pit from right
+          if (player.x < pitRight - 4 && playerCenter >= pitRight - 8) {
+            player.x = pitRight;
+            player.pushedAlertTick = 12;
+            if (player.x < GAME_BALANCE.playerDeathEdgeX) {
+              triggerDeathState('crushed');
+              return;
+            }
+          }
         }
       }
     });
