@@ -404,7 +404,31 @@ export default function GameEngine({
     audio.enabled = soundOn;
   }, [soundOn]);
 
-  // Consume camera-triggered actions from App so gameplay follows tracker state changes.
+  // Direct expression-to-control mapping (rising-edge jump, continuous shield)
+  useEffect(() => {
+    if (gameState !== 'PLAYING' || pausedRef.current) return;
+
+    // Smile → jump (rising-edge detection per-frame via ref, not just event)
+    if (smileLevel > smileThreshold && !wasSmilingRef.current) {
+      triggerJump();
+      wasSmilingRef.current = true;
+    } else if (smileLevel <= smileThreshold) {
+      wasSmilingRef.current = false;
+    }
+
+    // Surprise → shield (continuous hold)
+    const shouldShield = surpriseLevel > surpriseThreshold;
+    if (shouldShield !== playerRef.current.shieldActive) {
+      if (shouldShield && oxygenRef.current > 0) {
+        audio.playShieldOn();
+        playerRef.current.shieldActive = true;
+      } else if (!shouldShield) {
+        playerRef.current.shieldActive = false;
+      }
+    }
+  }, [smileLevel, surpriseLevel, smileThreshold, surpriseThreshold, gameState]);
+
+  // Consume camera-triggered actions from App as debounced supplement
   useEffect(() => {
     if (gameState !== 'PLAYING' || !externalAction || pausedRef.current) return;
 
