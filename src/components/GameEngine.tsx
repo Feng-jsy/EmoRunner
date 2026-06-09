@@ -1571,10 +1571,22 @@ export default function GameEngine({
     ctx.fill();
 
     const renderFloorWithPits = () => {
-      // Collect pit regions (sorted left→right)
-      const pitRegions = obstaclesRef.current
+      // Collect pit regions, sort left→right, then merge overlapping ones
+      const rawPits = obstaclesRef.current
         .filter(o => o.type === 'PIT')
-        .map(o => ({ left: o.x, right: o.x + o.width }));
+        .map(o => ({ left: o.x, right: o.x + o.width }))
+        .sort((a, b) => a.left - b.left);
+
+      // Merge pits whose red edges overlap (gap < 6px)
+      const pitRegions: { left: number; right: number }[] = [];
+      for (const pit of rawPits) {
+        const last = pitRegions[pitRegions.length - 1];
+        if (last && pit.left - last.right < 6) {
+          last.right = Math.max(last.right, pit.right);
+        } else {
+          pitRegions.push({ left: pit.left, right: pit.right });
+        }
+      }
 
       // Base ground surface
       ctx.fillStyle = curGround;
