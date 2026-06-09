@@ -3,6 +3,63 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// ============================================================
+// Centralized game balance — change one value, affect everything.
+// ============================================================
+export const GAME_BALANCE = {
+  // Physics
+  gravity: 0.05,
+  floorY: 360,
+
+  // Player geometry & anchor
+  playerX: 150,
+  playerWidth: 28,
+  playerHeight: 36,
+
+  // Speed curve
+  initialSpeed: 0.9,
+  maxSpeed: 2.0,
+  speedRampPerFrame: 0.000075,
+
+  // Jump (negative = upward)
+  jumpVyGround: -4.0,
+  jumpVyAir: -3.8,
+  doubleJumpFlashFrames: 12,
+
+  // Shield oxygen (seconds to deplete / refill at 1.0 drain)
+  shieldDepleteSec: 6,
+  shieldRefillSec: 6,
+  // Oxygen cost per shatter
+  shieldCostSmallCrate: 0.15,
+  shieldCostMediumCrate: 0.25,
+  shieldCostLargeCrate: 0.4,
+  shieldCostCeilingSpike: 0.3,
+
+  // Obstacle spawning (distance-traveled interval)
+  spawnIntervalBase: 240,
+  spawnIntervalRandom: 180, // +0..180 random
+
+  // Player pushed-back re‑center speed
+  playerReCenterSpeed: 0.8,
+  playerDeathEdgeX: 15,
+
+  // Pit void
+  pitDeathDepth: 140, // px below floorY
+
+  // Combo
+  comboTimerFrames: 120,
+  comboScoreThreshold: 3,
+
+  // Milestone
+  milestoneInterval: 1000, // every N meters
+
+  // Mini-objective celebration
+  miniObjCelebrateFrames: 90,
+
+  // Zone cycle
+  zoneInterval: 2000,
+} as const;
+
 export type GameState = 'MENU' | 'CALIBRATION' | 'PRELOADING' | 'PLAYING' | 'GAMEOVER';
 
 export interface CalibrationConfig {

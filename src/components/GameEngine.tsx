@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { GameState, Obstacle, Coin, Particle, GameScore, SkinId, MiniObjective, pickRandomMiniObjective, SHOP_SKINS, PowerUp, PowerUpType, POWERUP_DEFS } from '../types';
+import { GameState, Obstacle, Coin, Particle, GameScore, SkinId, MiniObjective, pickRandomMiniObjective, SHOP_SKINS, PowerUp, PowerUpType, POWERUP_DEFS, GAME_BALANCE } from '../types';
 import { Trophy, HelpCircle, Volume2, VolumeX, ShieldAlert, Zap } from 'lucide-react';
 
 interface GameEngineProps {
@@ -307,16 +307,16 @@ export default function GameEngine({
   const manualShieldDesiredRef = useRef<boolean>(false);
 
   // Playable settings
-  const gravity = 0.05;
-  const floorYLevel = 360;
+  const gravity = GAME_BALANCE.gravity;
+  const floorYLevel = GAME_BALANCE.floorY;
   
   // Game state representation
   const playerRef = useRef({
-    x: 150, // Home anchor
-    y: floorYLevel - 36, // Character center height
+    x: GAME_BALANCE.playerX, // Home anchor
+    y: floorYLevel - GAME_BALANCE.playerHeight, // Character center height
     vy: 0,
-    width: 28,
-    height: 36,
+    width: GAME_BALANCE.playerWidth,
+    height: GAME_BALANCE.playerHeight,
     isGrounded: true,
     airJumpsLeft: 0,
     doubleJumpFlash: 0, // frames for visual flash after double jump
@@ -330,7 +330,7 @@ export default function GameEngine({
   const obstaclesRef = useRef<Obstacle[]>([]);
   const coinsListRef = useRef<Coin[]>([]);
   const particlesRef = useRef<Particle[]>([]);
-  const speedRef = useRef<number>(0.9);
+  const speedRef = useRef<number>(GAME_BALANCE.initialSpeed);
   const lastSpawnDistanceRef = useRef<number>(0);
   const distanceTraveledRef = useRef<number>(0);
 
@@ -575,7 +575,7 @@ export default function GameEngine({
     miniObjProgressRef.current++;
     if (miniObjProgressRef.current >= obj.target) {
       miniObjDoneRef.current = true;
-      miniObjCelebrateRef.current = 90; // 1.5s celebration
+      miniObjCelebrateRef.current = GAME_BALANCE.miniObjCelebrateFrames; // 1.5s celebration
       coinsRef.current += obj.reward;
       setCoins(coinsRef.current);
       audio.playCoin();
@@ -586,7 +586,7 @@ export default function GameEngine({
     const player = playerRef.current;
     if (player.isGrounded) {
       // First jump from ground
-      player.vy = -4.0;
+      player.vy = GAME_BALANCE.jumpVyGround;
       player.isGrounded = false;
       player.airJumpsLeft = activePowerUpRef.current === 'TRIPLE_JUMP' ? 2 : 1;
       totalJumpsRef.current++;
@@ -594,9 +594,9 @@ export default function GameEngine({
       audio.playJump();
     } else if (player.airJumpsLeft > 0) {
       // Air jump (double / triple)
-      player.vy = -3.8;
+      player.vy = GAME_BALANCE.jumpVyAir;
       player.airJumpsLeft--;
-      player.doubleJumpFlash = 12; // visual flash duration
+      player.doubleJumpFlash = GAME_BALANCE.doubleJumpFlashFrames;
       totalJumpsRef.current++;
       updateMiniObj('jump_count');
       audio.playJump();
@@ -625,8 +625,8 @@ export default function GameEngine({
 
     // Reset player details
     playerRef.current = {
-      x: 150,
-      y: floorYLevel - 36,
+      x: GAME_BALANCE.playerX,
+      y: floorYLevel - GAME_BALANCE.playerHeight,
       vy: 0,
       width: 28,
       height: 36,
@@ -645,7 +645,7 @@ export default function GameEngine({
     coinsListRef.current = [];
     particlesRef.current = [];
     
-    speedRef.current = 0.9;
+    speedRef.current = GAME_BALANCE.initialSpeed;
     distanceTraveledRef.current = 0;
     lastSpawnDistanceRef.current = 100;
     comboCountRef.current = 0;
@@ -738,7 +738,7 @@ export default function GameEngine({
     // --- 1. PHYSICS UPDATE ---
     distanceTraveledRef.current += speed;
     scoreRef.current = Math.floor(distanceTraveledRef.current);
-    if (comboCountRef.current >= 3) {
+    if (comboCountRef.current >= GAME_BALANCE.comboScoreThreshold) {
       scoreRef.current += comboCountRef.current;
     }
     setScore(scoreRef.current);
@@ -775,7 +775,7 @@ export default function GameEngine({
     }
 
     // Milestone check (every 1000m) + random praise message
-    const currentMilestone = Math.floor(distanceTraveledRef.current / 1000);
+    const currentMilestone = Math.floor(distanceTraveledRef.current / GAME_BALANCE.milestoneInterval);
     if (currentMilestone > lastMilestoneRef.current) {
       lastMilestoneRef.current = currentMilestone;
       milestoneTimestampRef.current = timestamp;
@@ -821,8 +821,8 @@ export default function GameEngine({
     }
 
     // Slowly increase speed over time
-    if (speedRef.current < 2.0) {
-      speedRef.current += 0.000075;
+    if (speedRef.current < GAME_BALANCE.maxSpeed) {
+      speedRef.current += GAME_BALANCE.speedRampPerFrame;
     }
 
     // Pushed alert cooldown tick
@@ -835,15 +835,15 @@ export default function GameEngine({
       playerRef.current.doubleJumpFlash--;
     }
 
-    // Shield oxygen management (6s to deplete, 6s to refill) — real-time
+    // Shield oxygen management — real-time
     if (playerRef.current.shieldActive) {
-      oxygenRef.current -= dt / 6;
+      oxygenRef.current -= dt / GAME_BALANCE.shieldDepleteSec;
       if (oxygenRef.current <= 0) {
         oxygenRef.current = 0;
         playerRef.current.shieldActive = false;
       }
     } else {
-      oxygenRef.current = Math.min(1, oxygenRef.current + dt / 6);
+      oxygenRef.current = Math.min(1, oxygenRef.current + dt / GAME_BALANCE.shieldRefillSec);
     }
 
     // Power-up timer — real-time expiry
@@ -904,15 +904,15 @@ export default function GameEngine({
     });
 
     // Spawn Obstacles & Coins dynamically based on distance traveled
-    if (distanceTraveledRef.current - lastSpawnDistanceRef.current > 240 + Math.random() * 180) {
+    if (distanceTraveledRef.current - lastSpawnDistanceRef.current > GAME_BALANCE.spawnIntervalBase + Math.random() * GAME_BALANCE.spawnIntervalRandom) {
       lastSpawnDistanceRef.current = distanceTraveledRef.current;
 
       const rand = Math.random();
       const dist = distanceTraveledRef.current;
-      const comboChance = Math.min(0.5, Math.floor(dist / 2000) * 0.05);
+      const comboChance = Math.min(0.5, Math.floor(dist / GAME_BALANCE.zoneInterval) * 0.05);
 
       // Emotion zone: cycles every 2000m
-      const zoneIndex = Math.floor(dist / 2000) % 3; // 0=自信, 1=焦虑, 2=爆发
+      const zoneIndex = Math.floor(dist / GAME_BALANCE.zoneInterval) % 3; // 0=自信, 1=焦虑, 2=爆发
       const zoneCrateRate = [0.2, 0.3, 0.5][zoneIndex];
       const zonePitRate = [0.2, 0.4, 0.1][zoneIndex];
       const zoneCoinRate = [0.45, 0.15, 0.25][zoneIndex];
@@ -965,7 +965,7 @@ export default function GameEngine({
         });
       } else if (rand < pitThreshold) {
         // After 2000m, chance to spawn closely-spaced pit pairs (never 3)
-        const pitPairChance = dist > 2000 ? Math.min(0.55, (dist - 2000) / 5000) : 0;
+        const pitPairChance = dist > GAME_BALANCE.zoneInterval ? Math.min(0.55, (dist - GAME_BALANCE.zoneInterval) / 5000) : 0;
         if (Math.random() < pitPairChance) {
           const gap = 60 + Math.random() * 100; // tight gap between pits
           const pitW = 70 + Math.random() * 30;
@@ -1214,7 +1214,7 @@ export default function GameEngine({
     }
 
     // Ceiling spikes: appear after 200m, zone-dependent chance
-    const spikeZoneIdx = Math.floor(distanceTraveledRef.current / 2000) % 3;
+    const spikeZoneIdx = Math.floor(distanceTraveledRef.current / GAME_BALANCE.zoneInterval) % 3;
     const spikeZoneChance = [0.00015, 0.00025, 0.0001][spikeZoneIdx]; // 自信/焦虑/爆发
     if (distanceTraveledRef.current > 200 && Math.random() < spikeZoneChance) {
       const spikeDepth = 170 + Math.random() * 120; // how far down from ceiling (170-290px)
@@ -1282,12 +1282,12 @@ export default function GameEngine({
               player.shatteredCount++;
               updateMiniObj('shatter_crates');
               comboCountRef.current++;
-              comboTimerRef.current = 120;
+              comboTimerRef.current = GAME_BALANCE.comboTimerFrames;
               if (comboCountRef.current > maxComboRef.current) {
                 maxComboRef.current = comboCountRef.current;
               }
               // Shield shatter costs extra oxygen (bigger crate = more drain)
-              const crateCost = obs.width > 45 ? 0.4 : obs.width > 32 ? 0.25 : 0.15;
+              const crateCost = obs.width > 45 ? GAME_BALANCE.shieldCostLargeCrate : obs.width > 32 ? GAME_BALANCE.shieldCostMediumCrate : GAME_BALANCE.shieldCostSmallCrate;
               oxygenRef.current = Math.max(0, oxygenRef.current - crateCost);
               makeShatterParticles(obs.x, oxTop, '#a05a2c');
               audio.playBlockShatter();
@@ -1298,7 +1298,7 @@ export default function GameEngine({
               // Snap player to left of crate to avoid multi-frame dragging
               player.x = obs.x - player.width;
               player.pushedAlertTick = 12;
-              if (player.x < 15) {
+              if (player.x < GAME_BALANCE.playerDeathEdgeX) {
                 triggerDeathState('crushed');
                 return;
               }
@@ -1322,7 +1322,7 @@ export default function GameEngine({
           if (player.shieldActive) {
             // Shield shatters the spike, but costs oxygen
             obs.isShattered = true;
-            oxygenRef.current = Math.max(0, oxygenRef.current - 0.3);
+            oxygenRef.current = Math.max(0, oxygenRef.current - GAME_BALANCE.shieldCostCeilingSpike);
             makeShatterParticles(obs.x + obs.width / 2, sxBottom, '#8a8a9a');
             audio.playBlockShatter();
           } else {
@@ -1334,15 +1334,15 @@ export default function GameEngine({
     });
 
     // Check if player has fallen deep through the pit
-    if (player.y > floorYLevel + 140) {
+    if (player.y > floorYLevel + GAME_BALANCE.pitDeathDepth) {
       triggerDeathState('fell');
       return;
     }
 
     // Move player back home gradually if not currently being pushed
-    if (player.x < 150) {
-      player.x += 0.8; // Slowly re-center
-      if (player.x > 150) player.x = 150;
+    if (player.x < GAME_BALANCE.playerX) {
+      player.x += GAME_BALANCE.playerReCenterSpeed;
+      if (player.x > GAME_BALANCE.playerX) player.x = GAME_BALANCE.playerX;
     }
 
     // Scroll and resolve Coins capture
@@ -1445,13 +1445,13 @@ export default function GameEngine({
 
     // --- 2. RENDER GRAPHICS CANVAS ---
     // Smooth zone transition: blend over last 500m of each 2000m zone
-    const zoneProgress = (distanceTraveledRef.current % 2000) / 2000;
-    const blendWidth = 500 / 2000; // last 500m = 25% of zone
+    const zoneProgress = (distanceTraveledRef.current % GAME_BALANCE.zoneInterval) / GAME_BALANCE.zoneInterval;
+    const blendWidth = 500 / GAME_BALANCE.zoneInterval; // last 500m = 25% of zone
     let blendT = 0;
     if (zoneProgress > 1 - blendWidth) {
       blendT = (zoneProgress - (1 - blendWidth)) / blendWidth;
     }
-    const zoneA = Math.floor(distanceTraveledRef.current / 2000) % 3;
+    const zoneA = Math.floor(distanceTraveledRef.current / GAME_BALANCE.zoneInterval) % 3;
     const zoneB = (zoneA + 1) % 3;
 
     function lerpHex(a: string, b: string, t: number): string {
@@ -1970,7 +1970,7 @@ export default function GameEngine({
     ctx.fillText('S/右键 -> 护盾', W - 123, 52);
 
     // Combo display
-    if (comboCountRef.current >= 3) {
+    if (comboCountRef.current >= GAME_BALANCE.comboScoreThreshold) {
       ctx.save();
       ctx.font = '14px "Press Start 2P"';
       ctx.fillStyle = '#ffcc00';
@@ -2026,7 +2026,7 @@ export default function GameEngine({
       ctx.shadowColor = '#ffffff';
       ctx.shadowBlur = 20;
       ctx.textAlign = 'center';
-      ctx.fillText(`${lastMilestoneRef.current * 1000}m!`, W / 2, H / 2 - 55);
+      ctx.fillText(`${lastMilestoneRef.current * GAME_BALANCE.milestoneInterval}m!`, W / 2, H / 2 - 55);
 
       // Praise message — colorful text
       ctx.font = `${Math.floor(11 * scale)}px "Press Start 2P"`;
@@ -2037,7 +2037,7 @@ export default function GameEngine({
       ctx.fillText(praiseMessageRef.current, W / 2, H / 2 - 20);
 
       // Remaining distance to next milestone
-      const nextMilestone = (lastMilestoneRef.current + 1) * 1000;
+      const nextMilestone = (lastMilestoneRef.current + 1) * GAME_BALANCE.milestoneInterval;
       const remaining = Math.max(0, Math.round(nextMilestone - distanceTraveledRef.current));
       ctx.font = `${Math.floor(9 * scale)}px "Press Start 2P"`;
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
@@ -2134,7 +2134,7 @@ export default function GameEngine({
         {/* Zone indicator */}
         <div className="flex items-center gap-1.5">
           <span className="text-[8px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-900/60">
-            {['🌟 自信区', '😰 焦虑区', '💥 爆发区'][Math.floor(score / 2000) % 3]}
+            {['🌟 自信区', '😰 焦虑区', '💥 爆发区'][Math.floor(score / GAME_BALANCE.zoneInterval) % 3]}
           </span>
         </div>
 
