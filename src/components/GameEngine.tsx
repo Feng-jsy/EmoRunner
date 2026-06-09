@@ -877,13 +877,28 @@ export default function GameEngine({
         const pitLeft = obs.x;
         const pitRight = obs.x + obs.width;
 
-        // Natural ledge-fall: trigger when a significant portion of the player
-        // is over the pit (right third of body past the left edge, center before right edge).
-        // No wall collision — pits are holes, not solid objects.
+        // Natural ledge-fall: trigger when ~60% of player is over the pit
         const overPitLeft = playerRight - 8 > pitLeft + 2;
         const beforePitRight = playerCenter < pitRight - 2;
         if (overPitLeft && beforePitRight) {
           isInPitSector = true;
+        }
+
+        // Below-ground wall blocking: pit walls are solid underground,
+        // player must jump to surface height to escape
+        const playerBelowGround = player.y > floorYLevel - player.height;
+        if (playerBelowGround) {
+          // Player is inside or touching the pit zone → block at walls
+          if (playerCenter < pitRight && player.x + player.width > pitLeft) {
+            // Right wall: block exit to the right while underground
+            if (playerCenter >= pitRight - 3) {
+              player.x = pitRight;
+            }
+            // Left wall: block re-entry from left while underground
+            if (playerCenter <= pitLeft + 3) {
+              player.x = pitLeft - player.width;
+            }
+          }
         }
       }
     });
@@ -1559,91 +1574,91 @@ export default function GameEngine({
       ctx.fillRect(starX, starY, size, size);
     }
 
-    // Parallax Mountain range layer 1 (Triangle wave outline)
+    // Parallax Mountain range — multi-octave procedural ridges (seamless scroll)
+    const scroll1 = distanceTraveledRef.current * 0.45;
     ctx.fillStyle = curMountain;
     ctx.beginPath();
     ctx.moveTo(0, H);
-    for (let mIdx = 0; mIdx <= W + 100; mIdx += 60) {
-      const offsetX = -((distanceTraveledRef.current * 0.45) % 60);
-      const mH = 140 + Math.sin(mIdx + (distanceTraveledRef.current * 0.003)) * 30 + (mIdx % 3 === 0 ? 10 : 0);
-      ctx.lineTo(mIdx + offsetX, floorYLevel - mH);
+    for (let sx = 0; sx <= W + 30; sx += 25) {
+      const wx = sx + scroll1;
+      const h = 120 + Math.sin(wx * 0.005) * 40 + Math.sin(wx * 0.013 + 1.2) * 28 + Math.sin(wx * 0.031 + 2.8) * 14;
+      ctx.lineTo(sx, floorYLevel - h);
     }
     ctx.lineTo(W, H);
     ctx.closePath();
     ctx.fill();
 
-    // Parallax Mountain range layer 2 (Forest lines closer)
+    // Parallax Mountain range layer 2 (closer, faster parallax)
+    const scroll2 = distanceTraveledRef.current * 1.05;
     ctx.fillStyle = '#21213f';
     ctx.beginPath();
     ctx.moveTo(0, H);
-    for (let mIdx = 0; mIdx <= W + 100; mIdx += 40) {
-      const offsetX = -((distanceTraveledRef.current * 1.1) % 40);
-      const mH = 80 + Math.cos(mIdx * 0.05) * 15;
-      ctx.lineTo(mIdx + offsetX, floorYLevel - mH);
+    for (let sx = 0; sx <= W + 30; sx += 20) {
+      const wx = sx + scroll2;
+      const h = 55 + Math.sin(wx * 0.009) * 22 + Math.sin(wx * 0.025 + 0.9) * 14 + Math.sin(wx * 0.053 + 3.5) * 8;
+      ctx.lineTo(sx, floorYLevel - h);
     }
     ctx.lineTo(W, H);
     ctx.closePath();
     ctx.fill();
 
     const renderFloorWithPits = () => {
-      // Collect pit regions, sort left→right, then merge overlapping ones
-      const rawPits = obstaclesRef.current
-        .filter(o => o.type === 'PIT')
-        .map(o => ({ left: o.x, right: o.x + o.width }))
-        .sort((a, b) => a.left - b.left);
-
-      // Merge pits whose red edges overlap (gap < 6px)
-      const pitRegions: { left: number; right: number }[] = [];
-      for (const pit of rawPits) {
-        const last = pitRegions[pitRegions.length - 1];
-        if (last && pit.left - last.right < 6) {
-          last.right = Math.max(last.right, pit.right);
-        } else {
-          pitRegions.push({ left: pit.left, right: pit.right });
-        }
-      }
+      // Single-pass: collect pits (no merge — spawn-time merge already prevents overlaps)
+      const allObs = obstaclesRef.current;
+      const pitCount = allObs.filter(o => o.type === 'PIT').length;
 
       // Base ground surface
       ctx.fillStyle = curGround;
       ctx.fillRect(0, floorYLevel, W, H - floorYLevel);
 
-      // Draw pits / voids first
-      pitRegions.forEach(pit => {
+      // Draw pits — one pass, no intermediate arrays
+      for (let i = 0; i < allObs.length; i++) {
+        const obs = allObs[i];
+        if (obs.type !== 'PIT') continue;
+        const pL = obs.x;
+        const pR = obs.x + obs.width;
+
+        // Void fill
         ctx.fillStyle = '#0f0f1c';
-        ctx.fillRect(pit.left, floorYLevel, pit.right - pit.left, H - floorYLevel);
+        ctx.fillRect(pL, floorYLevel, pR - pL, H - floorYLevel);
 
-        // Red cliff edges (drawn deeper into the void for visibility)
+        // Red cliff edges
         ctx.fillStyle = '#ff3366';
-        ctx.fillRect(pit.left - 3, floorYLevel, 3, H - floorYLevel);
-        ctx.fillRect(pit.right, floorYLevel, 3, H - floorYLevel);
+        ctx.fillRect(pL - 3, floorYLevel, 3, H - floorYLevel);
+        ctx.fillRect(pR, floorYLevel, 3, H - floorYLevel);
+      }
 
-        // Pit warning text
-        ctx.font = '8px "Press Start 2P"';
-        ctx.fillStyle = 'rgba(255, 51, 102, 0.55)';
-        ctx.fillText('⚠ VOID', pit.left + 8, floorYLevel + 35);
-      });
-
-      // Neon green top line — only on solid ground, skip pits
+      // Neon green top line — skip pits
       ctx.fillStyle = '#39ff14';
       let greenStart = 0;
-      pitRegions.forEach(pit => {
-        const pL = Math.max(0, pit.left);
-        const pR = Math.min(W, pit.right);
+      for (let i = 0; i < allObs.length; i++) {
+        const obs = allObs[i];
+        if (obs.type !== 'PIT') continue;
+        const pL = Math.max(0, obs.x);
+        const pR = Math.min(W, obs.x + obs.width);
         if (pL > greenStart) {
           ctx.fillRect(greenStart, floorYLevel - 2, pL - greenStart, 4);
         }
         greenStart = Math.max(greenStart, pR);
-      });
+      }
       if (greenStart < W) {
         ctx.fillRect(greenStart, floorYLevel - 2, W - greenStart, 4);
       }
 
       // Vertical grid marks — skip pits
       ctx.fillStyle = 'rgba(57, 255, 20, 0.15)';
+      const gridOffset = -(distanceTraveledRef.current % 40);
       for (let gX = 0; gX <= W + 100; gX += 40) {
-        const offset = -(distanceTraveledRef.current % 40);
-        const markX = gX + offset;
-        const insidePit = pitRegions.some(p => markX > p.left + 3 && markX < p.right - 3);
+        const markX = gX + gridOffset;
+        let insidePit = false;
+        for (let i = 0; i < allObs.length; i++) {
+          const obs = allObs[i];
+          if (obs.type !== 'PIT') continue;
+          if (markX > obs.x + 3 && markX < obs.x + obs.width - 3) {
+            insidePit = true;
+            break;
+          }
+        }
         if (!insidePit) {
           ctx.fillRect(markX, floorYLevel + 4, 1, H - floorYLevel - 4);
         }
