@@ -181,7 +181,7 @@ export default function MainMenu({
             <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
               <span className="font-press-start text-[10px] text-emerald-400">01 / ADVENTURE</span>
               <span className="text-[9px] font-sans px-2 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800 rounded">
-                操控
+                推荐
               </span>
             </div>
             
@@ -217,7 +217,7 @@ export default function MainMenu({
                 </span>
               ) : (
                 <span className="text-[9px] font-sans px-2 py-0.5 bg-amber-950/60 text-retro-amber border border-amber-800 rounded animate-pulse">
-                  未校准 (建议进行)
+                  未校准
                 </span>
               )}
             </div>

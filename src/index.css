@@ -48,7 +48,7 @@
 /* Child selectors for nested components */
 [data-theme="light"] .bg-\[\#0d0d16\] { background-color: #eeeff3 !important; }
 [data-theme="light"] .bg-\[\#12121f\] { background-color: #ffffff !important; }
-[data-theme="light"] .bg-\[\#141424\] { background-color: #ffffff !important; }
+[data-theme="light"] .bg-\[\#141424\] { background-color: #f0f0f5 !important; }
 [data-theme="light"] .bg-\[\#1a1a2e\] { background-color: #f5f5fa !important; }
 [data-theme="light"] .bg-\[\#1b1b32\] { background-color: #ffffff !important; }
 [data-theme="light"] .bg-\[\#121221\] { background-color: #f5f5fa !important; }
@@ -102,9 +102,13 @@
 [data-theme="light"] .bg-red-950\/30 { background-color: #fff0f0 !important; }
 [data-theme="light"] .bg-red-900\/20 { background-color: #fff5f5 !important; }
 
-/* Game canvas area — softer neutral in light mode */
-[data-theme="light"] .bg-\[\#07070d\] { background-color: #e0e0e8 !important; }
-[data-theme="light"] .bg-\[\#0c0c16\] { background-color: #d8d8e0 !important; }
+/* In-game HUD chrome — slightly muted to reduce contrast with dark game canvas */
+[data-theme="light"] .bg-\[\#161626\] { background-color: #e8e8f0 !important; }
+[data-theme="light"] .bg-\[\#141424\] { background-color: #f0f0f5 !important; }
+
+/* Game canvas area — softer mid-tones */
+[data-theme="light"] .bg-\[\#07070d\] { background-color: #c8c8d8 !important; }
+[data-theme="light"] .bg-\[\#0c0c16\] { background-color: #b8b8c8 !important; }
 [data-theme="light"] .bg-\[\#241d1a\] { background-color: #fff8f0 !important; }
 
 /* bg-zinc-900 variants */
@@ -118,9 +122,12 @@
 [data-theme="light"] .bg-emerald-950\/40 { background-color: #e8f8ee !important; }
 [data-theme="light"] .bg-indigo-950\/60 { background-color: #e8e8fa !important; }
 [data-theme="light"] .bg-amber-950\/60 { background-color: #faf0e0 !important; }
+[data-theme="light"] .bg-amber-950\/40 { background-color: #faf5e8 !important; }
 [data-theme="light"] .bg-cyan-950\/60 { background-color: #e0f0f8 !important; }
 [data-theme="light"] .bg-cyan-950\/40 { background-color: #e8f4fa !important; }
+[data-theme="light"] .bg-red-950\/40 { background-color: #fff0f0 !important; }
 [data-theme="light"] .bg-violet-900\/30 { background-color: #f0e8fa !important; }
+[data-theme="light"] .bg-zinc-900\/40 { background-color: rgba(232, 232, 240, 0.4) !important; }
 
 /* Color-950 hover backgrounds */
 [data-theme="light"] .hover\:bg-cyan-950\/30:hover { background-color: #e8f4fa !important; }
@@ -137,6 +144,9 @@
 [data-theme="light"] .border-rose-500\/50 { border-color: rgba(220, 150, 160, 0.5) !important; }
 [data-theme="light"] .border-emerald-700\/50 { border-color: rgba(120, 200, 150, 0.5) !important; }
 [data-theme="light"] .border-emerald-800 { border-color: #b0d8c0 !important; }
+[data-theme="light"] .border-emerald-700 { border-color: #a0d0b0 !important; }
+[data-theme="light"] .border-amber-700 { border-color: #e0d0b0 !important; }
+[data-theme="light"] .border-red-700 { border-color: #e0b8b8 !important; }
 [data-theme="light"] .border-cyan-700\/60 { border-color: rgba(120, 180, 210, 0.6) !important; }
 [data-theme="light"] .border-cyan-700\/50 { border-color: rgba(120, 180, 210, 0.5) !important; }
 [data-theme="light"] .border-cyan-700\/40 { border-color: rgba(120, 180, 210, 0.4) !important; }

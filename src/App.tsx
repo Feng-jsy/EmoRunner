@@ -415,7 +415,7 @@ export default function App() {
             校准状态: {calibrationConfig.isCalibrated ? (
               <b className="text-retro-green">CUSTOMIZED ✓</b>
             ) : (
-              <span className="text-zinc-500">DEFAULT DEFAULT</span>
+              <span className="text-zinc-500">DEFAULT</span>
             )}
           </span>
         </div>
