@@ -283,6 +283,7 @@ export default function GameEngine({
   const [useKeyboardHelp, setUseKeyboardHelp] = useState<boolean>(true);
   const [helpFading, setHelpFading] = useState<boolean>(false);
   const [miniObjDisplay, setMiniObjDisplay] = useState<{ desc: string; progress: number; target: number; reward: number; done: boolean }>({ desc: '', progress: 0, target: 0, reward: 0, done: false });
+  const prevMiniObjRef = useRef<string>('');
 
   // High score tracking
   const [highScore, setHighScore] = useState<number>(0);
@@ -666,6 +667,7 @@ export default function GameEngine({
     miniObjProgressRef.current = 0;
     miniObjDoneRef.current = false;
     miniObjCelebrateRef.current = 0;
+    prevMiniObjRef.current = '';
     expressionSamplesRef.current = [];
     smileTriggerCountRef.current = 0;
     shieldTriggerCountRef.current = 0;
@@ -741,7 +743,10 @@ export default function GameEngine({
     if (comboCountRef.current >= GAME_BALANCE.comboScoreThreshold) {
       scoreRef.current += comboCountRef.current;
     }
-    setScore(scoreRef.current);
+    // Throttle React state sync to every 6 frames (~10Hz) to avoid 60fps re-renders
+    if (frameCounterRef.current % 6 === 0) {
+      setScore(scoreRef.current);
+    }
 
     // Expression sampling (every 30 frames = 0.5s @ 60fps)
     frameCounterRef.current++;
@@ -804,14 +809,20 @@ export default function GameEngine({
       miniObjCelebrateRef.current--;
     }
 
-    // Sync mini-objective display state
-    setMiniObjDisplay({
-      desc: miniObjRef.current.description,
-      progress: miniObjProgressRef.current,
-      target: miniObjRef.current.target,
-      reward: miniObjRef.current.reward,
-      done: miniObjDoneRef.current,
-    });
+    // Sync mini-objective display state — only when values actually change
+    {
+      const key = `${miniObjRef.current.description}|${miniObjProgressRef.current}|${miniObjRef.current.target}|${miniObjDoneRef.current}`;
+      if (key !== prevMiniObjRef.current) {
+        prevMiniObjRef.current = key;
+        setMiniObjDisplay({
+          desc: miniObjRef.current.description,
+          progress: miniObjProgressRef.current,
+          target: miniObjRef.current.target,
+          reward: miniObjRef.current.reward,
+          done: miniObjDoneRef.current,
+        });
+      }
+    }
 
     if (comboTimerRef.current > 0) {
       comboTimerRef.current--;
