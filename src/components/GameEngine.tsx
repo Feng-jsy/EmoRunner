@@ -6,6 +6,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { GameState, Obstacle, Coin, Particle, GameScore, SkinId, MiniObjective, pickRandomMiniObjective, SHOP_SKINS, PowerUp, PowerUpType, POWERUP_DEFS, GAME_BALANCE } from '../types';
 import { Trophy, HelpCircle, Volume2, VolumeX, ShieldAlert, Zap } from 'lucide-react';
+import { audio } from './audio';
+import { runSpawning } from './spawner';
+import { renderFloorWithPits, drawObstacles, drawPlayer } from './renderer';
 
 interface GameEngineProps {
   gameState: GameState;
@@ -16,221 +19,9 @@ interface GameEngineProps {
   surpriseThreshold: number;
   isCalibrated: boolean;
   skinId: SkinId;
-  onGameOver: (finalScore: number, finalCoins: number, shattered: number, jumps: number, maxCombo: number, expressionStats: { smileAvg: number; smileMax: number; surpriseAvg: number; surpriseMax: number; jumpTriggers: number; shieldTriggers: number }) => void;
+  onGameOver: (finalScore: number, finalCoins: number, shattered: number, jumps: number, maxCombo: number, expressionStats: { smileAvg: number; smileMax: number; surpriseAvg: number; surpriseMax: number; jumpTriggers: number; shieldTriggers: number }, usedManualInput: boolean, shieldFrames: number, oldHighScore: number, deathReason: string) => void;
   onRestart: () => void;
 }
-
-// 8-bit Sound Synthesizer using Web Audio API
-class RetroAudioEngine {
-  private ctx: AudioContext | null = null;
-  public enabled: boolean = true;
-
-  constructor() {
-    // Initialized lazily on first user interaction
-  }
-
-  private initCtx() {
-    if (!this.ctx) {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
-  }
-
-  public init() {
-    try {
-      this.initCtx();
-    } catch (_) {}
-  }
-
-  playJump() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(150, t);
-      osc.frequency.exponentialRampToValueAtTime(550, t + 0.15);
-      
-      gain.gain.setValueAtTime(0.15, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
-      
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      
-      osc.start(t);
-      osc.stop(t + 0.18);
-    } catch (_) {}
-  }
-
-  playShieldOn() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(300, t);
-      osc.frequency.linearRampToValueAtTime(600, t + 0.1);
-      
-      gain.gain.setValueAtTime(0.08, t);
-      gain.gain.linearRampToValueAtTime(0.03, t + 0.12);
-      
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      
-      osc.start(t);
-      osc.stop(t + 0.12);
-    } catch (_) {}
-  }
-
-  playBlockShatter() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      
-      // Explosion sound via short noise or pulse
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(120, t);
-      osc.frequency.exponentialRampToValueAtTime(10, t + 0.25);
-      
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.28);
-      
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      
-      osc.start(t);
-      osc.stop(t + 0.28);
-    } catch (_) {}
-  }
-
-  playCoin() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      
-      osc.type = 'sine';
-      // Retro C5 -> E5 double musical beep
-      osc.frequency.setValueAtTime(523.25, t); // C5
-      osc.frequency.setValueAtTime(659.25, t + 0.07); // E5
-      
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.setValueAtTime(0.12, t + 0.07);
-      gain.gain.exponentialRampToValueAtTime(0.005, t + 0.2);
-      
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      
-      osc.start(t);
-      osc.stop(t + 0.2);
-    } catch (_) {}
-  }
-
-  playDeath() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(300, t);
-      osc.frequency.linearRampToValueAtTime(50, t + 0.6);
-
-      gain.gain.setValueAtTime(0.2, t);
-      gain.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
-
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start(t);
-      osc.stop(t + 0.6);
-    } catch (_) {}
-  }
-
-  playMilestone() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-
-      // Triumphant ascending arpeggio: C5 → E5 → G5 → C6
-      const notes = [523.25, 659.25, 783.99, 1046.5];
-      notes.forEach((freq, i) => {
-        const osc = this.ctx!.createOscillator();
-        const gain = this.ctx!.createGain();
-        osc.type = 'triangle';
-        const start = t + i * 0.12;
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.14, start + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.01, start + 0.35);
-        osc.connect(gain);
-        gain.connect(this.ctx!.destination);
-        osc.start(start);
-        osc.stop(start + 0.35);
-      });
-    } catch (_) {}
-  }
-
-  playImpale() {
-    if (!this.enabled) return;
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-
-      // Sharp metallic sting
-      const osc1 = this.ctx.createOscillator();
-      const gain1 = this.ctx.createGain();
-      osc1.type = 'square';
-      osc1.frequency.setValueAtTime(880, t);
-      osc1.frequency.exponentialRampToValueAtTime(220, t + 0.15);
-      gain1.gain.setValueAtTime(0.18, t);
-      gain1.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
-      osc1.connect(gain1);
-      gain1.connect(this.ctx.destination);
-      osc1.start(t);
-      osc1.stop(t + 0.2);
-
-      // Low thud
-      const osc2 = this.ctx.createOscillator();
-      const gain2 = this.ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(80, t + 0.05);
-      osc2.frequency.exponentialRampToValueAtTime(30, t + 0.4);
-      gain2.gain.setValueAtTime(0.25, t + 0.05);
-      gain2.gain.exponentialRampToValueAtTime(0.01, t + 0.45);
-      osc2.connect(gain2);
-      gain2.connect(this.ctx.destination);
-      osc2.start(t + 0.05);
-      osc2.stop(t + 0.45);
-    } catch (_) {}
-  }
-}
-
-const audio = new RetroAudioEngine();
 
 // Over-the-top praise messages for every 1000m milestone
 const PRAISE_POOL: string[] = [
@@ -278,9 +69,10 @@ export default function GameEngine({
   
   // Game states and scores
   const [score, setScore] = useState<number>(0);
+  const [speedDisplay, setSpeedDisplay] = useState<number>(GAME_BALANCE.initialSpeed);
   const [coins, setCoins] = useState<number>(0);
   const [soundOn, setSoundOn] = useState<boolean>(true);
-  const [useKeyboardHelp, setUseKeyboardHelp] = useState<boolean>(true);
+  const [useKeyboardHelp, setUseKeyboardHelp] = useState<boolean>(false);
   const [helpFading, setHelpFading] = useState<boolean>(false);
   const [miniObjDisplay, setMiniObjDisplay] = useState<{ desc: string; progress: number; target: number; reward: number; done: boolean }>({ desc: '', progress: 0, target: 0, reward: 0, done: false });
   const prevMiniObjRef = useRef<string>('');
@@ -343,7 +135,7 @@ export default function GameEngine({
   const milestoneAlphaRef = useRef<number>(0);
   const milestoneTimestampRef = useRef<number>(0); // for 4s fade-in/out timing
   const praiseMessageRef = useRef<string>('');
-  const coinRainPhaseRef = useRef<number>(0); // 0="v2.39", 1="hello~", 2+=random
+  const coinRainPhaseRef = useRef<number>(0); // 0="v3.0", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
@@ -353,6 +145,8 @@ export default function GameEngine({
   const powerUpExpiryRef = useRef<number>(0); // timestamp when power-up expires
   const oxygenRef = useRef<number>(1.0); // shield oxygen 0-1
   const lastTickTimeRef = useRef<number>(0); // for real-time delta calculation
+  const usedManualInputRef = useRef<boolean>(false); // tracked for expression_only challenge
+  const cumulativeShieldFramesRef = useRef<number>(0); // tracked for shield_limit challenge
 
   const skin = SHOP_SKINS.find((s) => s.id === skinId) || SHOP_SKINS[0];
 
@@ -387,22 +181,6 @@ export default function GameEngine({
     };
   }, []);
 
-  // Auto-dismiss keyboard help after 5 seconds with fade
-  useEffect(() => {
-    if (gameState !== 'PLAYING') {
-      setUseKeyboardHelp(true);
-      setHelpFading(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      setHelpFading(true);
-      setTimeout(() => {
-        setUseKeyboardHelp(false);
-        setHelpFading(false);
-      }, 500);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [gameState]);
 
   // Update sound engine toggle
   useEffect(() => {
@@ -473,11 +251,13 @@ export default function GameEngine({
 
       if (e.key === ' ' || e.key === 'ArrowUp') {
         e.preventDefault();
+        usedManualInputRef.current = true;
         triggerJump();
       }
 
       if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
         e.preventDefault();
+        usedManualInputRef.current = true;
         manualShieldDesiredRef.current = true;
         if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
           audio.playShieldOn();
@@ -501,9 +281,11 @@ export default function GameEngine({
       if (gameState !== 'PLAYING' || pausedRef.current) return;
       if (e.button === 0) { // left click = jump
         e.preventDefault();
+        usedManualInputRef.current = true;
         triggerJump();
       } else if (e.button === 2) { // right click = shield
         e.preventDefault();
+        usedManualInputRef.current = true;
         manualShieldDesiredRef.current = true;
         if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
           audio.playShieldOn();
@@ -674,6 +456,8 @@ export default function GameEngine({
     wasSmilingRef.current = false;
     wasShieldingRef.current = false;
     manualShieldDesiredRef.current = false;
+    usedManualInputRef.current = false;
+    cumulativeShieldFramesRef.current = 0;
     frameCounterRef.current = 0;
 
     // Begin looping
@@ -746,6 +530,7 @@ export default function GameEngine({
     // Throttle React state sync to every 6 frames (~10Hz) to avoid 60fps re-renders
     if (frameCounterRef.current % 6 === 0) {
       setScore(scoreRef.current);
+      setSpeedDisplay(speedRef.current);
     }
 
     // Expression sampling (every 30 frames = 0.5s @ 60fps)
@@ -848,6 +633,7 @@ export default function GameEngine({
 
     // Shield oxygen management — real-time
     if (playerRef.current.shieldActive) {
+      cumulativeShieldFramesRef.current++;
       oxygenRef.current -= dt / GAME_BALANCE.shieldDepleteSec;
       if (oxygenRef.current <= 0) {
         oxygenRef.current = 0;
@@ -912,384 +698,19 @@ export default function GameEngine({
       }
     });
 
-    // Spawn Obstacles & Coins dynamically based on distance traveled
-    if (distanceTraveledRef.current - lastSpawnDistanceRef.current > GAME_BALANCE.spawnIntervalBase + Math.random() * GAME_BALANCE.spawnIntervalRandom) {
-      lastSpawnDistanceRef.current = distanceTraveledRef.current;
-
-      const rand = Math.random();
-      const dist = distanceTraveledRef.current;
-      const comboChance = Math.min(0.5, Math.floor(dist / GAME_BALANCE.zoneInterval) * 0.05);
-
-      // Emotion zone: cycles every 2000m
-      const zoneIndex = Math.floor(dist / GAME_BALANCE.zoneInterval) % 3; // 0=自信, 1=焦虑, 2=爆发
-      const zoneCrateRate = [0.2, 0.3, 0.5][zoneIndex];
-      const zonePitRate = [0.2, 0.4, 0.1][zoneIndex];
-      const zoneCoinRate = [0.45, 0.15, 0.25][zoneIndex];
-
-      const crateThreshold = comboChance + zoneCrateRate;
-      const pitThreshold = crateThreshold + zonePitRate;
-      const coinThreshold = pitThreshold + zoneCoinRate;
-
-      if (rand < comboChance) {
-        // --- COMBO PATTERNS ---
-        const pattern = Math.floor(Math.random() * 3);
-        if (pattern === 0) {
-          obstaclesRef.current.push({
-            id: `pit_before_${Date.now()}`,
-            type: 'PIT', x: W + 20, width: 100, height: 120, color: '#111119',
-          });
-          obstaclesRef.current.push({
-            id: `crate_after_${Date.now()}`,
-            type: 'CRATE', x: W + 155, width: 32, height: 38, color: '#c07038',
-          });
-          // Jump-guide arc over the pit → crate
-          const guideN = 3;
-          for (let g = 0; g < guideN; g++) {
-            const t = (g + 1) / (guideN + 1);
-            const xOff = t * 135; // pit(100) + gap(35) → crate
-            const yOff = 4 * 72 * t * (1 - t);
-            coinsListRef.current.push({
-              id: `coin_guide_${Date.now()}_${g}`,
-              x: W + 20 + xOff,
-              y: floorYLevel - 18 - yOff,
-              collected: false,
-            });
-          }
-        } else if (pattern === 1) {
-          // Parabolic coin arc — matches natural jump
-          const arcN = 5;
-          const arcSpan = 120;
-          const arcPeak = 75;
-          for (let i = 0; i < arcN; i++) {
-            const t = i / (arcN - 1);
-            const xOff = t * arcSpan;
-            const yOff = 4 * arcPeak * t * (1 - t);
-            coinsListRef.current.push({
-              id: `coin_arc_${Date.now()}_${i}`,
-              x: W + 20 + xOff,
-              y: floorYLevel - 18 - yOff,
-              collected: false,
-            });
-          }
-          lastSpawnDistanceRef.current = distanceTraveledRef.current + 60;
-        } else {
-          obstaclesRef.current.push({
-            id: `crate_wall1_${Date.now()}`,
-            type: 'CRATE', x: W + 20, width: 32, height: 38, color: '#c07038',
-          });
-          obstaclesRef.current.push({
-            id: `crate_wall2_${Date.now()}`,
-            type: 'CRATE', x: W + 76, width: 32, height: 38, color: '#b5651d',
-          });
-        }
-      } else if (rand < crateThreshold) {
-        obstaclesRef.current.push({
-          id: `crate_${Date.now()}`,
-          type: 'CRATE', x: W + 20, width: 32, height: 38, color: '#c07038',
-        });
-      } else if (rand < pitThreshold) {
-        // After 2000m, chance to spawn closely-spaced pit pairs (never 3)
-        const pitPairChance = dist > GAME_BALANCE.zoneInterval ? Math.min(0.55, (dist - GAME_BALANCE.zoneInterval) / 5000) : 0;
-        if (Math.random() < pitPairChance) {
-          const gap = 60 + Math.random() * 100; // tight gap between pits
-          const pitW = 70 + Math.random() * 30;
-          const pitBWidth = pitW + Math.random() * 20;
-          const pitAX = W + 20;
-          const pitBX = W + 20 + pitW + gap;
-          // Max combined width a double-jump can cross (with speed≥1.0)
-          const maxPitWidth = 250;
-
-          if (gap < 10) {
-            // Overlapping pits → merge into one, no red divider
-            const mergedWidth = Math.min(pitBX + pitBWidth - pitAX, maxPitWidth);
-            obstaclesRef.current.push({
-              id: `pit_merged_${Date.now()}`,
-              type: 'PIT', x: pitAX, width: mergedWidth, height: 120, color: '#111119',
-            });
-            coinsListRef.current.push({
-              id: `coin_gap_${Date.now()}`,
-              x: pitAX + mergedWidth / 2, y: floorYLevel - 75, collected: false,
-            });
-          } else {
-            obstaclesRef.current.push({
-              id: `pit_pairA_${Date.now()}`,
-              type: 'PIT', x: pitAX, width: pitW, height: 120, color: '#111119',
-            });
-            obstaclesRef.current.push({
-              id: `pit_pairB_${Date.now()}`,
-              type: 'PIT', x: pitBX, width: pitBWidth, height: 120, color: '#111119',
-            });
-            // Reward coin in the gap
-            coinsListRef.current.push({
-              id: `coin_gap_${Date.now()}`,
-              x: W + 20 + pitW + gap / 2, y: floorYLevel - 75, collected: false,
-            });
-          }
-        } else {
-          // Single pit with jump-guide coin arc
-          const pitW = 105;
-          obstaclesRef.current.push({
-            id: `pit_${Date.now()}`,
-            type: 'PIT', x: W + 20, width: pitW, height: 120, color: '#111119',
-          });
-          // Arc of 3 coins tracing natural jump parabola over the pit
-          const guideCoinCount = 3;
-          for (let g = 0; g < guideCoinCount; g++) {
-            const t = (g + 1) / (guideCoinCount + 1); // 0.25, 0.5, 0.75
-            const xOff = t * pitW;
-            const yOff = 4 * 145 * t * (1 - t); // jump peak ~160px
-            coinsListRef.current.push({
-              id: `coin_${Date.now()}_${g}`,
-              x: W + 20 + xOff,
-              y: floorYLevel - 18 - yOff,
-              collected: false,
-            });
-          }
-        }
-      } else if (rand < coinThreshold) {
-        // Jump-arc coin trail: parabolic pattern = natural jump trajectory
-        const coinCount = 5 + Math.floor(Math.random() * 4); // 5-8 coins
-        const arcSpanX = 200 + Math.random() * 120; // jump covers ~240px at speed 1.5
-        const arcPeakY = 140 + Math.random() * 35; // matches jump peak ~160px
-        for (let i = 0; i < coinCount; i++) {
-          const t = i / (coinCount - 1); // 0 → 1
-          const xOff = t * arcSpanX;
-          const yOff = 4 * arcPeakY * t * (1 - t);
-          coinsListRef.current.push({
-            id: `coin_${Date.now()}_${i}`,
-            x: W + 20 + xOff,
-            y: floorYLevel - 18 - yOff,
-            collected: false,
-          });
-        }
-      }
-    }
-
-    // --- SURPRISE EVENTS ---
-
-    // Power-up spawn: rare (~0.025% per frame), magnet appears 3x more
-    if (distanceTraveledRef.current > 150 && Math.random() < 0.00025) {
-      const weighted: PowerUpType[] = ['TRIPLE_JUMP', 'MAGNET', 'MAGNET', 'MAGNET', 'RAINBOW_GLOW', 'STAR_TRAIL'];
-      const t = weighted[Math.floor(Math.random() * weighted.length)];
-      const def = POWERUP_DEFS[t];
-      powerUpsRef.current.push({
-        id: `pu_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
-        type: t,
-        x: W + Math.random() * 100,
-        y: floorYLevel - 70 - Math.random() * 80,
-        collected: false,
-        icon: def.icon,
-        label: def.label,
-        color: def.color,
-      });
-    }
-
-    // Coin rain: 0.08% chance per frame
-    if (Math.random() < 0.0008) {
-      const now = Date.now();
-      const coinSize = 10;
-
-      if (coinRainPhaseRef.current === 0) {
-        // First rain: spell out "v2.39"
-        coinRainPhaseRef.current = 1;
-        const startX = W + 20;
-        const startY = 100;
-        const charV  = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,1],[4,3],[5,2]];
-        const char2  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,3],[4,2],[5,1],[6,0],[6,1],[6,2],[6,3],[6,4]];
-        const charDot = [[4,1],[5,1]];
-        const char3  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
-        const char8  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,1],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
-        const char9  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,1],[3,2],[3,3],[4,4],[5,4],[6,1],[6,2],[6,3]];
-        const chars: [number, number, number[][]][] = [
-          [0, 0, charV],
-          [6, 0, char2],
-          [13, 0, charDot],
-          [19, 0, char3],
-          [26, 0, char9],
-        ];
-        let id = 0;
-        chars.forEach(([colOffset, _rowOffset, bitmap]) => {
-          bitmap.forEach(([r, c]) => {
-            coinsListRef.current.push({
-              id: `rain_${now}_${id++}`,
-              x: startX + (colOffset + c) * coinSize,
-              y: startY + r * coinSize,
-              collected: false,
-            });
-          });
-        });
-      } else if (coinRainPhaseRef.current === 1) {
-        // Second rain: spell out "hello~"
-        coinRainPhaseRef.current = 2;
-        const startX = W + 20;
-        const startY = 100;
-        // 5-col x 7-row pixel font
-        const charH: number[][] = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,1],[3,2],[3,3],[3,4],[4,0],[4,4],[5,0],[5,4],[6,0],[6,4]];
-        const charE: number[][] = [[1,1],[1,2],[1,3],[2,0],[2,4],[3,0],[3,1],[3,2],[3,3],[3,4],[4,0],[5,0],[5,4],[6,1],[6,2],[6,3]];
-        const charL: number[][] = [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[6,1],[6,2],[6,3]];
-        const charO: number[][] = [[1,1],[1,2],[1,3],[2,0],[2,4],[3,0],[3,4],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
-        const charTilde: number[][] = [[3,2],[4,1],[4,3],[5,0],[5,4]];
-        const helloChars: [number, number, number[][]][] = [
-          [0, 0, charH],
-          [6, 0, charE],
-          [12, 0, charL],
-          [18, 0, charL],
-          [24, 0, charO],
-          [30, 0, charTilde],
-        ];
-        let id = 0;
-        helloChars.forEach(([colOffset, _rowOffset, bitmap]) => {
-          bitmap.forEach(([r, c]) => {
-            coinsListRef.current.push({
-              id: `rain_${now}_${id++}`,
-              x: startX + (colOffset + c) * coinSize,
-              y: startY + r * coinSize,
-              collected: false,
-            });
-          });
-        });
-      } else {
-        // Subsequent rains: 50% word, 50% geometric
-        const pixFont: Record<string, string> = {
-          a: '0111010001111111000110001100011000110001',
-          b: '1111010001100011111010001100011000111110',
-          c: '0111010001100001000010000100011000101110',
-          d: '1111010001100011000110001100011000111110',
-          e: '1111110000100001111010000100001000011111',
-          f: '1111110000100001111010000100001000010000',
-          g: '0111010001100001011110001100011000101110',
-          h: '1000110001100011111110001100011000110001',
-          i: '0111000100001000010000100001000010001110',
-          j: '0011100010000100001000010000100010011000',
-          k: '1000110010101001100010100100101001010001',
-          l: '1000010000100001000010000100001000011110',
-          m: '1000111011101011010110001100011000110001',
-          n: '1000111001101011001110001100011000110001',
-          o: '0111010001100011000110001100011000101110',
-          p: '1111010001100011111010000100001000010000',
-          r: '1111010001100011111010100100101001010001',
-          s: '0111010001100000111000001000110001011100',
-          t: '1111100100001000010000100001000010000100',
-          u: '1000110001100011000110001100011000101110',
-          w: '1000110001100011000110101101011010101010',
-          x: '1000110001010100010001010010001100010001',
-          y: '1000110001010100010000100001000010000100',
-          z: '1111100001000100010001000100001000011111',
-        };
-        function spellWord(word: string, startX: number, startY: number, size: number) {
-          let id = 0;
-          let colOff = 0;
-          for (const ch of word) {
-            const bitmap = pixFont[ch];
-            if (!bitmap) { colOff += 6; continue; }
-            for (let row = 0; row < 7; row++) {
-              for (let col = 0; col < 5; col++) {
-                if (bitmap[row * 5 + col] === '1') {
-                  coinsListRef.current.push({
-                    id: `rain_${now}_${id++}`,
-                    x: startX + (colOff + col) * size,
-                    y: startY + row * size,
-                    collected: false,
-                  });
-                }
-              }
-            }
-            colOff += 6;
-          }
-        }
-
-        const words = ['wow','lol','gg','win','yes','cool','nice','fun','pro','fire','jump','boss','epic','good','omg','ggwp','ha','yo','go','ace'];
-        if (Math.random() < 0.5) {
-          // Spell a random word
-          const word = words[Math.floor(Math.random() * words.length)];
-          spellWord(word, W + 20, 100, 10);
-        } else {
-          // Geometric patterns
-          const pattern = Math.floor(Math.random() * 4);
-          const cx = W + 180;
-          const cy = 150;
-          const n = 14 + Math.floor(Math.random() * 8);
-
-        if (pattern === 0) {
-          const a = 0.004 + Math.random() * 0.004;
-          const span = 200 + Math.random() * 100;
-          for (let i = 0; i < n; i++) {
-            const t = (i / (n - 1) - 0.5) * 2;
-            const px = cx + t * span;
-            const py = cy + a * (px - cx) * (px - cx) * 0.5 - 40 - Math.random() * 20;
-            coinsListRef.current.push({ id: `rain_${now}_${i}`, x: px, y: Math.max(40, py), collected: false });
-          }
-        } else if (pattern === 1) {
-          const rows = Math.ceil(Math.sqrt(n));
-          const spacing = 28;
-          let count = 0;
-          for (let row = 0; row < rows && count < n; row++) {
-            const colsInRow = row <= Math.floor(rows / 2) ? row + 1 : rows - row;
-            const sX = cx - (colsInRow - 1) * spacing / 2;
-            for (let col = 0; col < colsInRow && count < n; col++) {
-              coinsListRef.current.push({
-                id: `rain_${now}_${count}`,
-                x: sX + col * spacing + (Math.random() - 0.5) * 8,
-                y: cy - row * spacing * 0.8 + (Math.random() - 0.5) * 8,
-                collected: false,
-              });
-              count++;
-            }
-          }
-        } else if (pattern === 2) {
-          const amp = 50 + Math.random() * 60;
-          const freq = 0.02 + Math.random() * 0.02;
-          const sX = cx - 180;
-          for (let i = 0; i < n; i++) {
-            const px = sX + i * (360 / (n - 1));
-            const py = cy + Math.sin((px - cx) * freq) * amp;
-            coinsListRef.current.push({ id: `rain_${now}_${i}`, x: px, y: Math.max(40, py), collected: false });
-          }
-        } else {
-          const maxR = 120 + Math.random() * 40;
-          for (let i = 0; i < n; i++) {
-            const t = i / (n - 1);
-            const r = t * maxR;
-            const angle = t * Math.PI * 4 + (Math.random() - 0.5) * 0.3;
-            coinsListRef.current.push({
-              id: `rain_${now}_${i}`,
-              x: cx + Math.cos(angle) * r,
-              y: cy + Math.sin(angle) * r * 0.6,
-              collected: false,
-            });
-          }
-        }
-        } // end geometric patterns else
-      }
-    }
-
-    // Giant crate: 0.1% chance per spawn
-    if (Math.random() < 0.001) {
-      obstaclesRef.current.push({
-        id: `giant_${Date.now()}`,
-        type: 'CRATE',
-        x: W + 20,
-        width: 52,
-        height: 58,
-        color: '#8b0000',
-      });
-    }
-
-    // Ceiling spikes: appear after 200m, zone-dependent chance
-    const spikeZoneIdx = Math.floor(distanceTraveledRef.current / GAME_BALANCE.zoneInterval) % 3;
-    const spikeZoneChance = [0.00015, 0.00025, 0.0001][spikeZoneIdx]; // 自信/焦虑/爆发
-    if (distanceTraveledRef.current > 200 && Math.random() < spikeZoneChance) {
-      const spikeDepth = 170 + Math.random() * 120; // how far down from ceiling (170-290px)
-      const spikeWidth = 60 + Math.random() * 140; // cluster width
-      obstaclesRef.current.push({
-        id: `spike_${Date.now()}`,
-        type: 'CEILING_SPIKE',
-        x: W + Math.random() * 60,
-        width: spikeWidth,
-        height: spikeDepth,
-        color: '#8a8a9a',
-      });
-    }
+    // Spawn Obstacles & Coins via spawner module
+    const spawnResult = runSpawning({
+      W,
+      floorYLevel,
+      obstacles: obstaclesRef.current,
+      coins: coinsListRef.current,
+      powerUps: powerUpsRef.current,
+      distanceTraveled: distanceTraveledRef.current,
+      lastSpawnDistance: lastSpawnDistanceRef.current,
+      coinRainPhase: coinRainPhaseRef.current,
+    });
+    lastSpawnDistanceRef.current = spawnResult.lastSpawnDistance;
+    coinRainPhaseRef.current = spawnResult.coinRainPhase;
 
     // Scroll obstacles and detect interaction collisions
     obstaclesRef.current.forEach((obs, idx) => {
@@ -1390,6 +811,22 @@ export default function GameEngine({
             triggerDeathState('impaled');
             return;
           }
+        }
+      }
+
+      // Hot floor collision: standing on glowing floor = death
+      if (obs.type === 'HOT_FLOOR') {
+        const pxLeft = player.x;
+        const pxRight = player.x + player.width;
+        const pxBottom = player.y + player.height;
+
+        if (
+          player.isGrounded &&
+          pxRight > obs.x + 4 && pxLeft < obs.x + obs.width - 4 &&
+          pxBottom >= floorYLevel - 2
+        ) {
+          triggerDeathState('burned');
+          return;
         }
       }
     });
@@ -1580,69 +1017,7 @@ export default function GameEngine({
     ctx.closePath();
     ctx.fill();
 
-    const renderFloorWithPits = () => {
-      // Single-pass: collect pits (no merge — spawn-time merge already prevents overlaps)
-      const allObs = obstaclesRef.current;
-      const pitCount = allObs.filter(o => o.type === 'PIT').length;
-
-      // Base ground surface
-      ctx.fillStyle = curGround;
-      ctx.fillRect(0, floorYLevel, W, H - floorYLevel);
-
-      // Draw pits — one pass, no intermediate arrays
-      for (let i = 0; i < allObs.length; i++) {
-        const obs = allObs[i];
-        if (obs.type !== 'PIT') continue;
-        const pL = obs.x;
-        const pR = obs.x + obs.width;
-
-        // Void fill
-        ctx.fillStyle = '#0f0f1c';
-        ctx.fillRect(pL, floorYLevel, pR - pL, H - floorYLevel);
-
-        // Red cliff edges
-        ctx.fillStyle = '#ff3366';
-        ctx.fillRect(pL - 3, floorYLevel, 3, H - floorYLevel);
-        ctx.fillRect(pR, floorYLevel, 3, H - floorYLevel);
-      }
-
-      // Neon green top line — skip pits
-      ctx.fillStyle = '#39ff14';
-      let greenStart = 0;
-      for (let i = 0; i < allObs.length; i++) {
-        const obs = allObs[i];
-        if (obs.type !== 'PIT') continue;
-        const pL = Math.max(0, obs.x);
-        const pR = Math.min(W, obs.x + obs.width);
-        if (pL > greenStart) {
-          ctx.fillRect(greenStart, floorYLevel - 2, pL - greenStart, 4);
-        }
-        greenStart = Math.max(greenStart, pR);
-      }
-      if (greenStart < W) {
-        ctx.fillRect(greenStart, floorYLevel - 2, W - greenStart, 4);
-      }
-
-      // Vertical grid marks — skip pits
-      ctx.fillStyle = 'rgba(57, 255, 20, 0.15)';
-      const gridOffset = -(distanceTraveledRef.current % 40);
-      for (let gX = 0; gX <= W + 100; gX += 40) {
-        const markX = gX + gridOffset;
-        let insidePit = false;
-        for (let i = 0; i < allObs.length; i++) {
-          const obs = allObs[i];
-          if (obs.type !== 'PIT') continue;
-          if (markX > obs.x + 3 && markX < obs.x + obs.width - 3) {
-            insidePit = true;
-            break;
-          }
-        }
-        if (!insidePit) {
-          ctx.fillRect(markX, floorYLevel + 4, 1, H - floorYLevel - 4);
-        }
-      }
-    };
-    renderFloorWithPits();
+    renderFloorWithPits(ctx, W, H, obstaclesRef.current, floorYLevel, distanceTraveledRef.current, curGround);
 
     // Drawing Coins
     coinsListRef.current.forEach((c) => {
@@ -1708,107 +1083,7 @@ export default function GameEngine({
       ctx.textAlign = 'start';
     });
 
-    // Drawing Obstacles (Wood Crates)
-    obstaclesRef.current.forEach((obs) => {
-      if (obs.type === 'CRATE' && !obs.isShattered) {
-        const boxY = floorYLevel - obs.height;
-
-        // Crate body base (Brown wood tone)
-        ctx.fillStyle = '#a05a2c';
-        ctx.fillRect(obs.x, boxY, obs.width, obs.height);
-
-        // Inner borders
-        ctx.strokeStyle = '#5a3216';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(obs.x + 1.5, boxY + 1.5, obs.width - 3, obs.height - 3);
-
-        ctx.strokeStyle = '#8a4d25';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(obs.x + 4, boxY + 4, obs.width - 8, obs.height - 8);
-
-        // Crisscross plank lines
-        ctx.beginPath();
-        ctx.moveTo(obs.x + 4, boxY + 4);
-        ctx.lineTo(obs.x + obs.width - 4, boxY + obs.height - 4);
-        ctx.moveTo(obs.x + obs.width - 4, boxY + 4);
-        ctx.lineTo(obs.x + 4, boxY + obs.height - 4);
-        ctx.stroke();
-
-        // White highlighting corner pixels
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.fillRect(obs.x + 2, boxY + 2, 3, 3);
-        ctx.fillRect(obs.x + obs.width - 5, boxY + 2, 3, 3);
-      }
-    });
-
-    // Drawing Ceiling Spikes (hanging from top of screen)
-    obstaclesRef.current.forEach((obs) => {
-      if (obs.type === 'CEILING_SPIKE' && !obs.isShattered) {
-        const spikeTipY = obs.height;
-        const spikeCount = Math.max(1, Math.floor(obs.width / 28));
-        const spacing = obs.width / spikeCount;
-        const baseWidth = 22;
-
-        for (let i = 0; i < spikeCount; i++) {
-          const cx = obs.x + i * spacing + spacing / 2;
-          const tipY = spikeTipY + (Math.random() - 0.5) * 12; // slight variation
-
-          // Spike shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.35)';
-          ctx.beginPath();
-          ctx.moveTo(cx - baseWidth/2 + 4, 2);
-          ctx.lineTo(cx + 2, tipY + 2);
-          ctx.lineTo(cx + baseWidth/2, 2);
-          ctx.closePath();
-          ctx.fill();
-
-          // Main spike body - dark metallic
-          ctx.fillStyle = '#6b6b7a';
-          ctx.beginPath();
-          ctx.moveTo(cx - baseWidth/2, 0);
-          ctx.lineTo(cx, tipY);
-          ctx.lineTo(cx + baseWidth/2, 0);
-          ctx.closePath();
-          ctx.fill();
-
-          // Lighter edge highlight
-          ctx.fillStyle = '#9a9aae';
-          ctx.beginPath();
-          ctx.moveTo(cx - baseWidth/2, 0);
-          ctx.lineTo(cx, tipY);
-          ctx.lineTo(cx - baseWidth/2 + 4, 0);
-          ctx.closePath();
-          ctx.fill();
-
-          // Blood-red tip
-          const tipGlow = 10 + Math.sin(timestamp * 0.015 + i) * 3;
-          ctx.fillStyle = '#cc2233';
-          ctx.beginPath();
-          ctx.moveTo(cx - 4, tipY - tipGlow);
-          ctx.lineTo(cx, tipY);
-          ctx.lineTo(cx + 4, tipY - tipGlow);
-          ctx.closePath();
-          ctx.fill();
-
-          // Bright red drip point
-          ctx.fillStyle = '#ff3344';
-          ctx.beginPath();
-          ctx.arc(cx, tipY, 2, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Ceiling mount bracket
-          ctx.fillStyle = '#4a4a58';
-          ctx.fillRect(cx - baseWidth/2 - 2, 0, baseWidth + 4, 5);
-          ctx.fillStyle = '#5a5a6a';
-          ctx.fillRect(cx - baseWidth/2, 0, baseWidth, 4);
-
-          // Bracket bolts
-          ctx.fillStyle = '#333340';
-          ctx.fillRect(cx - baseWidth/2 + 3, 1, 3, 2);
-          ctx.fillRect(cx + baseWidth/2 - 6, 1, 3, 2);
-        }
-      }
-    });
+    drawObstacles(ctx, obstaclesRef.current, floorYLevel, timestamp);
 
     // Drawing particle debris
     particlesRef.current.forEach((p) => {
@@ -1818,177 +1093,21 @@ export default function GameEngine({
     });
     ctx.globalAlpha = 1.0; // Reset
 
-    // --- DRAW SUITED BUSINESSMAN CHARACTER ---
-    const animFrame = player.frame;
-    const isJumping = !player.isGrounded && player.vy < 0;
-    const isFalling = !player.isGrounded && player.vy >= 0;
-    const shirtColor = '#f5f5f0';
+    // Player character
+    drawPlayer(ctx, player.x, player.y, skin, timestamp, {
+      shieldActive: player.shieldActive,
+      doubleJumpFlash: player.doubleJumpFlash,
+      airJumpsLeft: player.airJumpsLeft,
+      isGrounded: player.isGrounded,
+      pushedAlertTick: player.pushedAlertTick,
+      animationTick: player.animationTick,
+      frame: player.frame,
+      vy: player.vy,
+      height: player.height,
+      isTripleJump: activePowerUpRef.current === 'TRIPLE_JUMP' && player.airJumpsLeft >= 2,
+      activePowerUp: activePowerUpRef.current === 'RAINBOW_GLOW' ? 'RAINBOW_GLOW' : null,
+    });
 
-    ctx.save();
-    ctx.translate(player.x, player.y);
-
-    // Flash red when pushed
-    const flashOn = player.pushedAlertTick > 0 && Math.floor(timestamp / 50) % 2 === 0;
-    const faceColor = flashOn ? '#ff6666' : skin.skinColor;
-    const hairColor = flashOn ? '#330000' : skin.hairColor;
-    const suitCol = flashOn ? '#4a1010' : skin.suitColor;
-    const tieCol = flashOn ? '#ff0000' : skin.visorColor;
-
-    // --- HEAD (y: 0-10) ---
-    // Hair cap
-    ctx.fillStyle = hairColor;
-    ctx.fillRect(4, 0, 20, 3);
-    // Hair left sideburn
-    ctx.fillRect(3, 1, 3, 8);
-    // Hair right sideburn
-    ctx.fillRect(22, 1, 3, 8);
-    // Face
-    ctx.fillStyle = faceColor;
-    ctx.fillRect(5, 3, 18, 7);
-    // Glasses / cyber visor
-    ctx.fillStyle = tieCol;
-    ctx.fillRect(14, 5, 8, 2);
-    // Mouth (subtle)
-    ctx.fillStyle = '#c09878';
-    ctx.fillRect(12, 8.5, 4, 1);
-
-    // --- NECK ---
-    ctx.fillStyle = faceColor;
-    ctx.fillRect(11, 10, 6, 2);
-
-    // --- UPPER BODY (y: 11-23): Suit jacket ---
-    // Jacket left side
-    ctx.fillStyle = suitCol;
-    ctx.fillRect(3, 11, 10, 12);
-    // Jacket right side
-    ctx.fillRect(15, 11, 10, 12);
-    // Jacket shoulders (slightly wider)
-    ctx.fillRect(2, 11, 3, 4);
-    ctx.fillRect(23, 11, 3, 4);
-
-    // White shirt collar V
-    ctx.fillStyle = shirtColor;
-    ctx.fillRect(10, 11, 8, 3);
-
-    // Tie
-    ctx.fillStyle = tieCol;
-    ctx.fillRect(12, 14, 4, 7);
-
-    // Shirt visible below tie
-    ctx.fillStyle = shirtColor;
-    ctx.fillRect(10, 20, 8, 3);
-
-    // Jacket bottom (covers shirt sides)
-    ctx.fillStyle = suitCol;
-    ctx.fillRect(3, 18, 7, 5);
-    ctx.fillRect(18, 18, 7, 5);
-
-    // Belt
-    ctx.fillStyle = hairColor;
-    ctx.fillRect(5, 23, 18, 2);
-    // Belt buckle
-    ctx.fillStyle = tieCol;
-    ctx.fillRect(12, 23, 4, 2);
-
-    // --- LOWER BODY (y: 25-35): Dress pants ---
-    ctx.fillStyle = suitCol;
-
-    if (isJumping) {
-      // Knees up
-      ctx.fillRect(4, 25, 8, 5);
-      ctx.fillRect(16, 25, 8, 5);
-      // Shoes
-      ctx.fillStyle = hairColor;
-      ctx.fillRect(3, 30, 9, 3);
-      ctx.fillRect(16, 30, 9, 3);
-    } else if (isFalling) {
-      // Legs extended down
-      ctx.fillRect(5, 25, 7, 10);
-      ctx.fillRect(16, 25, 7, 10);
-      // Shoes
-      ctx.fillStyle = hairColor;
-      ctx.fillRect(4, 33, 9, 3);
-      ctx.fillRect(15, 33, 9, 3);
-    } else {
-      // Running stride animation
-      if (animFrame === 0) {
-        ctx.fillRect(5, 25, 7, 8);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(4, 33, 9, 3);
-        ctx.fillStyle = suitCol;
-        ctx.fillRect(17, 25, 7, 5);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(16, 30, 9, 3);
-      } else if (animFrame === 1) {
-        ctx.fillRect(6, 25, 6, 8);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(5, 33, 9, 3);
-        ctx.fillStyle = suitCol;
-        ctx.fillRect(16, 25, 6, 8);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(16, 33, 9, 3);
-      } else if (animFrame === 2) {
-        ctx.fillRect(5, 25, 7, 5);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(4, 30, 9, 3);
-        ctx.fillStyle = suitCol;
-        ctx.fillRect(17, 25, 7, 8);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(16, 33, 9, 3);
-      } else {
-        ctx.fillRect(6, 25, 6, 6);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(5, 31, 9, 3);
-        ctx.fillStyle = suitCol;
-        ctx.fillRect(16, 25, 6, 6);
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(16, 31, 9, 3);
-      }
-    }
-
-    // --- SHIELD EFFECT ---
-    if (player.shieldActive) {
-      ctx.strokeStyle = 'rgba(0, 255, 255, 0.85)';
-      ctx.lineWidth = Math.sin(timestamp * 0.02) * 2 + 3;
-      ctx.beginPath();
-      ctx.arc(14, 17, 32, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(0, 255, 255, 0.06)';
-      ctx.fill();
-      ctx.font = '6px "Press Start 2P"';
-      ctx.fillStyle = '#00ffff';
-      ctx.textAlign = 'center';
-      if (Math.floor(timestamp / 100) % 3 === 0) {
-        ctx.fillText('SHIELD', 14, -10);
-      }
-    }
-
-    // --- DOUBLE JUMP FLASH EFFECT ---
-    if (player.doubleJumpFlash > 0) {
-      const flashAlpha = player.doubleJumpFlash / 12;
-      // Expanding ring
-      const ringRadius = (12 - player.doubleJumpFlash) * 4 + 8;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${flashAlpha * 0.7})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(14, 17, ringRadius, 0, Math.PI * 2);
-      ctx.stroke();
-      // Flash overlay
-      ctx.fillStyle = `rgba(255, 255, 200, ${flashAlpha * 0.15})`;
-      ctx.fillRect(2, 0, 24, player.height);
-    }
-
-    // --- AIR JUMP AVAILABLE INDICATOR ---
-    if (player.airJumpsLeft > 0 && !player.isGrounded) {
-      const bobbleY = Math.sin(timestamp * 0.06) * 3;
-      const isTriple = activePowerUpRef.current === 'TRIPLE_JUMP' && player.airJumpsLeft >= 2;
-      ctx.fillStyle = isTriple ? 'rgba(255, 102, 0, 0.8)' : 'rgba(255, 204, 0, 0.7)';
-      ctx.font = '7px "Press Start 2P"';
-      ctx.textAlign = 'center';
-      ctx.fillText(isTriple ? '⬆⬆⬆' : '⬆⬆', 14, player.height + 12 + bobbleY);
-    }
-
-    // --- ACTIVE POWER-UP VISUALS ---
     // Star trail: leave sparkles behind player
     if (activePowerUpRef.current === 'STAR_TRAIL' && player.animationTick % 3 === 0) {
       particlesRef.current.push({
@@ -2002,17 +1121,6 @@ export default function GameEngine({
         life: 0.5,
       });
     }
-    // Rainbow glow: cycling hue overlay
-    if (activePowerUpRef.current === 'RAINBOW_GLOW') {
-      const hue = (timestamp * 0.3) % 360;
-      ctx.fillStyle = `hsla(${hue}, 80%, 60%, 0.2)`;
-      ctx.fillRect(2, 0, 24, player.height);
-      ctx.strokeStyle = `hsla(${hue}, 90%, 70%, 0.6)`;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(2, 0, 24, player.height);
-    }
-
-    ctx.restore();
 
     // Warn if getting pushed backwards close to the edge of death
     if (player.x < 100) {
@@ -2024,23 +1132,6 @@ export default function GameEngine({
       ctx.fillText('被卡住! 快跳! ⚠️', player.x, player.y - 18);
       ctx.restore();
     }
-
-    // --- 3. RENDERING OVERLAYS OR HUDS ---
-    // Floating Expression HUD status at top right
-    ctx.fillStyle = 'rgba(26, 26, 46, 0.75)';
-    ctx.strokeStyle = '#2d2d48';
-    ctx.lineWidth = 1;
-    ctx.fillRect(W - 130, 15, 115, 42);
-    ctx.strokeRect(W - 130, 15, 115, 42);
-
-    ctx.font = '7px "Press Start 2P"';
-    ctx.fillStyle = '#8a8ab0';
-    ctx.fillText('ACTION KEYS:', W - 123, 27);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '10px sans-serif';
-    ctx.fillText('空格/左键 -> 跳跃', W - 123, 40);
-    ctx.fillText('S/右键 -> 护盾', W - 123, 52);
 
     // Combo display
     if (comboCountRef.current >= GAME_BALANCE.comboScoreThreshold) {
@@ -2140,22 +1231,23 @@ export default function GameEngine({
     gameLoopIdRef.current = requestAnimationFrame(runGameTick);
   }
 
-  function triggerDeathState(reason: 'crushed' | 'fell' | 'impaled') {
+  function triggerDeathState(reason: 'crushed' | 'fell' | 'impaled' | 'burned') {
     stopGameLoop();
     if (reason === 'impaled') {
       audio.playImpale();
     } else {
       audio.playDeath();
     }
-    
+
     // Save new high score in localStorage
     const finalScore = scoreRef.current;
     const finalCoins = coinsRef.current;
-    
+    let oldHighScore = 0;
+
     try {
       const stored = localStorage.getItem('retro_run_highscore');
-      const curMax = stored ? parseInt(stored, 10) : 0;
-      if (finalScore > curMax) {
+      oldHighScore = stored ? parseInt(stored, 10) : 0;
+      if (finalScore > oldHighScore) {
         localStorage.setItem('retro_run_highscore', finalScore.toString());
         setHighScore(finalScore);
       }
@@ -2180,13 +1272,15 @@ export default function GameEngine({
       shieldTriggers: shieldTriggerCountRef.current,
     };
 
-    onGameOver(finalScore, finalCoins, playerRef.current.shatteredCount, totalJumpsRef.current, maxComboRef.current, exprStats);
+    onGameOver(finalScore, finalCoins, playerRef.current.shatteredCount, totalJumpsRef.current, maxComboRef.current, exprStats, usedManualInputRef.current, cumulativeShieldFramesRef.current, oldHighScore, reason);
   }
 
   return (
     <div
       ref={containerRef}
-      className="w-full flex-1 flex flex-col justify-between items-stretch bg-[#111119] select-none h-full"
+      className={`w-full flex-1 flex flex-col justify-between items-stretch select-none h-full transition-colors duration-1000 ${
+        ['bg-[#111119]', 'bg-[#1a1118]', 'bg-[#181411]'][Math.floor(score / GAME_BALANCE.zoneInterval) % 3]
+      }`}
     >
       {/* HUD Header Area */}
       <div className="bg-[#161626] border-b-4 border-zinc-900 px-4 py-3 flex items-center justify-between gap-4 font-press-start text-[9px] text-[#e0e0ea] z-10 w-full">
@@ -2208,6 +1302,14 @@ export default function GameEngine({
         <div className="flex items-center gap-1.5">
           <span className="text-[8px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-900/60">
             {['🌟 自信区', '😰 焦虑区', '💥 爆发区'][Math.floor(score / GAME_BALANCE.zoneInterval) % 3]}
+          </span>
+          {/* Speed gauge */}
+          <span className={`text-[8px] px-2 py-0.5 rounded border font-mono ${
+            speedDisplay > 1.6 ? 'border-red-700 bg-red-950/40 text-red-400' :
+            speedDisplay > 1.3 ? 'border-amber-700 bg-amber-950/40 text-amber-400' :
+            'border-emerald-700 bg-emerald-950/40 text-emerald-400'
+          }`}>
+            ⚡{speedDisplay.toFixed(1)}x
           </span>
         </div>
 
@@ -2265,19 +1367,10 @@ export default function GameEngine({
           className="w-full max-h-[480px] bg-[#0c0c16] rounded-sm shadow-inner pixel-border border-zinc-900 focus:outline-none"
         />
 
-        {/* Hover keyboard instructional tips */}
+        {/* Keyboard help bar — manual toggle only */}
         {useKeyboardHelp && gameState === 'PLAYING' && (
-          <div className={`absolute top-4 left-4 bg-black/85 backdrop-blur border border-zinc-805 p-3 rounded-lg flex flex-col gap-1 text-[11px] text-zinc-400 font-sans pointer-events-auto z-10 max-w-xs shadow-xl shadow-black/80 transition-opacity duration-500 ${helpFading ? 'opacity-0' : 'opacity-100 animate-fade-in'}`}>
-            <div className="flex justify-between font-bold text-indigo-400 pb-1 border-b border-zinc-800 mb-1">
-              <span>🎮 操作支持说明</span>
-              <button onClick={() => setUseKeyboardHelp(false)} className="mx-1 text-zinc-500 hover:text-white px-1">✕</button>
-            </div>
-            <p className="leading-snug">识别延迟或无镜头时，欢迎用以下方式操控：</p>
-            <ul className="list-disc pl-4 space-y-0.5 text-zinc-300">
-              <li><b className="text-white">😀 / [空格] / 鼠标左键</b> ➔ 跳跃越过虚空与木箱。</li>
-              <li><b className="text-white">😮 / [S键] / 鼠标右键(按住)</b> ➔ 护盾撞碎木箱，右键松开即关闭。</li>
-              <li className="text-zinc-500 text-[10px]">🖱️ <b className="text-zinc-400">[ESC]</b> 暂停 &nbsp;|&nbsp; 右键菜单已禁用</li>
-            </ul>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/75 backdrop-blur border border-zinc-700/60 rounded-lg px-5 py-1.5 text-[10px] text-zinc-400 font-mono pointer-events-auto z-10 select-none">
+            空格 = 跳跃 &nbsp;|&nbsp; S = 护盾 &nbsp;|&nbsp; ESC = 暂停
           </div>
         )}
       </div>

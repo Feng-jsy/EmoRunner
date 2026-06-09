@@ -4,8 +4,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Play, Sparkles, Smile, ShieldAlert, Award, AlertCircle, RefreshCw, Trophy, User, Medal, Camera } from 'lucide-react';
-import { CalibrationConfig, ACHIEVEMENTS, DailyChallenge, LeaderboardEntry, ExpressionRecord } from '../types';
+import { Play, Sparkles, Smile, ShieldAlert, Award, RefreshCw, Trophy, User, Medal, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalibrationConfig, ACHIEVEMENTS, DailyChallenge, LeaderboardEntry, ExpressionRecord, STORAGE_KEYS } from '../types';
 
 interface MainMenuProps {
   onStartGame: () => void;
@@ -40,20 +40,119 @@ export default function MainMenu({
 }: MainMenuProps) {
   const [hasCameraAccess, setHasCameraAccess] = useState<boolean | null>(null);
   const [showGallery, setShowGallery] = useState<boolean>(false);
+  const [showTutorial, setShowTutorial] = useState<boolean>(false);
+  const [tutorialStep, setTutorialStep] = useState<number>(0);
 
-  // Check general media query
+  const TUTORIAL_PAGES = [
+    {
+      icon: '😊',
+      title: '微笑 = 跳跃',
+      desc: '对着摄像头露出笑容，角色就会跳起来！\n笑得越灿烂，跳得越干脆。',
+      tip: '小提示：自然微笑即可，不需要夸张大笑',
+    },
+    {
+      icon: '😲',
+      title: '惊讶 = 护盾',
+      desc: '张大嘴巴或瞪大眼睛，激活能量护盾！\n护盾可以撞碎木箱和尖刺，保护你前行。',
+      tip: '小提示：护盾开启时会持续消耗呼吸条',
+    },
+    {
+      icon: '🎮',
+      title: '多模式操控',
+      desc: '没有摄像头也没关系！\n键盘 [空格] 跳跃 | [S/右键] 护盾\n鼠标 左键/点击屏幕 = 跳跃 | 右键按住 = 护盾',
+      tip: '小提示：所有操控方式完全互通，随时切换',
+    },
+  ];
+
+  // Check general media query + tutorial seen
   useEffect(() => {
-    // Check if camera permission flows can start
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       setHasCameraAccess(true);
     } else {
       setHasCameraAccess(false);
     }
+    const done = localStorage.getItem(STORAGE_KEYS.tutorialDone);
+    if (!done) {
+      setShowTutorial(true);
+    }
   }, []);
 
+  const dismissTutorial = () => {
+    localStorage.setItem(STORAGE_KEYS.tutorialDone, '1');
+    setShowTutorial(false);
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-8 flex flex-col justify-center items-center gap-8 min-h-[550px] animate-fade-in select-none">
-      
+    <>
+      {/* ===== TUTORIAL OVERLAY ===== */}
+      {showTutorial && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#1b1b32] border-4 border-cyan-700/60 rounded-3xl p-8 w-full max-w-md shadow-2xl shadow-cyan-900/30 animate-fade-in text-center">
+            {/* Step icon */}
+            <div className="text-7xl mb-4 animate-bounce">{TUTORIAL_PAGES[tutorialStep].icon}</div>
+            <h2 className="font-press-start text-lg text-cyan-300 mb-3">{TUTORIAL_PAGES[tutorialStep].title}</h2>
+            <p className="font-sans text-sm text-zinc-300 leading-relaxed whitespace-pre-line mb-3">
+              {TUTORIAL_PAGES[tutorialStep].desc}
+            </p>
+            <p className="font-sans text-[11px] text-zinc-500 mb-6">
+              {TUTORIAL_PAGES[tutorialStep].tip}
+            </p>
+
+            {/* Step dots */}
+            <div className="flex justify-center gap-2 mb-6">
+              {TUTORIAL_PAGES.map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full transition ${
+                    i === tutorialStep ? 'bg-cyan-400 scale-125' : 'bg-zinc-700'
+                  }`}
+                />
+              ))}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between gap-3">
+              {tutorialStep > 0 ? (
+                <button
+                  onClick={() => setTutorialStep(tutorialStep - 1)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-sans transition flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" /> 上一步
+                </button>
+              ) : (
+                <div />
+              )}
+
+              {tutorialStep < TUTORIAL_PAGES.length - 1 ? (
+                <button
+                  onClick={() => setTutorialStep(tutorialStep + 1)}
+                  className="px-5 py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded-xl text-xs font-sans transition flex items-center gap-1 cursor-pointer"
+                >
+                  下一步 <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={dismissTutorial}
+                  className="px-6 py-2 bg-gradient-to-r from-[#39ff14] to-emerald-500 hover:from-[#5eff42] hover:to-emerald-400 text-[#0c0c16] font-bold rounded-xl text-sm transition cursor-pointer"
+                >
+                  开始闯关！
+                </button>
+              )}
+            </div>
+
+            {/* Skip */}
+            <button
+              onClick={dismissTutorial}
+              className="mt-4 text-[10px] text-zinc-600 hover:text-zinc-400 transition cursor-pointer"
+            >
+              跳过教程
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-4xl mx-auto px-4 py-8 flex flex-col justify-center items-center gap-8 min-h-[550px] animate-fade-in select-none">
+
       {/* 8-bit ARCADE MACHINE LOGO HEADER */}
       <div className="text-center space-y-4 max-w-md">
         <div className="relative inline-block py-2">
@@ -62,14 +161,14 @@ export default function MainMenu({
             情绪闯关 EmoRunner
           </h1>
           <div className="absolute -top-3 -right-6 text-[9px] font-press-start bg-rose-500 text-white font-bold px-1 py-0.5 rounded rotate-12 scale-90 animate-bounce">
-                        MVP+ v2.39
+                        MVP+ v3.0
           </div>
         </div>
         
         <p className="font-sans text-xs text-zinc-400 font-medium tracking-wide leading-relaxed">
-          基于 <b>Web 摄像头表情检测</b> 的 2D 像素闯关游戏。
+          基于 <b>面部表情识别</b> 的 2D 像素闯关游戏。
           <br />
-          使用笑脸触发跳跃，张大嘴巴召唤力量护盾打击障碍！
+          笑脸跳跃，惊讶护盾，突破障碍！
         </p>
       </div>
 
@@ -82,26 +181,18 @@ export default function MainMenu({
             <div className="flex justify-between items-center pb-2 border-b border-zinc-800">
               <span className="font-press-start text-[10px] text-emerald-400">01 / ADVENTURE</span>
               <span className="text-[9px] font-sans px-2 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800 rounded">
-                推荐动作
+                操控
               </span>
             </div>
             
-            <h3 className="font-sans font-bold text-[#e0e0ea] text-lg">主线闯关模式</h3>
+            <h3 className="font-sans font-bold text-[#e0e0ea] text-lg">开始闯关</h3>
             <p className="font-sans text-xs text-zinc-400 leading-relaxed">
               人物将不停向前跑，需要面对层出不穷的<b>虚空悬崖</b>和<b>致命木箱障碍</b>。在极速增加的难度中坚持更长距离！
             </p>
 
-            <div className="space-y-2 bg-[#121221] p-3 rounded-xl border border-zinc-900 text-xs text-zinc-400 font-sans">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400 font-sans">😀 笑脸表情</span>
-                <span className="text-zinc-500">➔</span>
-                <span className="text-zinc-300"><b>跳跃</b> 以跃过大峡谷与障碍</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-cyan-400 font-sans">😮 惊讶表情</span>
-                <span className="text-zinc-500">➔</span>
-                <span className="text-zinc-300"><b>激活护盾</b> 瞬间撞碎挡路的大木箱</span>
-              </div>
+            <div className="flex items-center justify-center gap-5 bg-[#121221] p-2.5 rounded-xl border border-zinc-900 text-sm">
+              <span>😀=跳跃</span>
+              <span>😮=护盾</span>
             </div>
           </div>
 
@@ -110,7 +201,7 @@ export default function MainMenu({
             className="w-full py-4 mt-6 bg-gradient-to-r from-[#39ff14] to-emerald-500 hover:from-[#5eff42] hover:to-emerald-400 text-[#0c0c16] font-bold rounded-xl shadow-lg shadow-emerald-900/30 transition duration-150 font-press-start text-[10px] flex items-center justify-center gap-2 cursor-pointer"
           >
             <Play className="w-4 h-4 fill-current stroke-0" />
-            开启探索闯关
+            开始闯关
           </button>
         </div>
 
@@ -131,7 +222,7 @@ export default function MainMenu({
               )}
             </div>
             
-            <h3 className="font-sans font-bold text-[#e0e0ea] text-lg">面部微表情识别调校</h3>
+            <h3 className="font-sans font-bold text-[#e0e0ea] text-lg">表情校准</h3>
             <p className="font-sans text-xs text-zinc-400 leading-relaxed">
               每个人的脸型结构、嘴型、光照和摄像头焦距不同。实验室可通过简单的平静、微笑、惊讶三步，<b>定制生成专属您的判定阈值</b>。
             </p>
@@ -173,7 +264,7 @@ export default function MainMenu({
               <Award className="w-6 h-6" />
             </div>
             <div>
-              <span className="text-[10px] font-press-start text-zinc-500 block">累计硬币</span>
+              <span className="text-[10px] font-press-start text-zinc-500 block">硬币</span>
               <span className="font-press-start text-xl text-retro-gold font-bold">{totalCoins}</span>
             </div>
           </div>
@@ -279,19 +370,6 @@ export default function MainMenu({
             {leaderboard.length === 0 && (
               <p className="text-zinc-600 text-[10px] text-center py-4">暂无纪录，快去挑战吧!</p>
             )}
-          </div>
-        </div>
-
-        {/* REASSURING FALLBACK STATEMENT */}
-        <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl p-5 flex items-center gap-3">
-          <div className="p-3 bg-[#1d1c2b] text-indigo-400 rounded-lg border border-indigo-900/50">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <div className="text-xs font-sans text-zinc-400 leading-relaxed">
-            <p className="font-semibold text-zinc-300">💡 多模式操控支持</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">
-              除摄像头表情识别外，您可使用 <b>[空格/左键] 跳跃</b> + <b>[S键/右键按住] 护盾</b> + <b>[ESC] 暂停</b> 进行流畅游玩，三种操控方式完全互通。
-            </p>
           </div>
         </div>
 
@@ -402,8 +480,17 @@ export default function MainMenu({
         </div>
       )}
 
-      {/* RESET DATA */}
-      <div className="w-full max-w-3xl flex justify-center mt-4">
+      {/* RESET DATA & REPLAY TUTORIAL */}
+      <div className="w-full max-w-3xl flex justify-center mt-4 gap-3">
+        <button
+          onClick={() => {
+            setTutorialStep(0);
+            setShowTutorial(true);
+          }}
+          className="px-4 py-2 bg-transparent hover:bg-cyan-950/30 text-zinc-600 hover:text-cyan-400 border border-zinc-800 hover:border-cyan-800 rounded-lg text-[9px] font-sans transition cursor-pointer"
+        >
+          新手教程
+        </button>
         <button
           onClick={() => {
             if (confirm('确认清除所有数据吗？这将删除金币、皮肤、成就、纪录等所有本地存储数据，此操作不可恢复！')) {
@@ -412,10 +499,11 @@ export default function MainMenu({
           }}
           className="px-4 py-2 bg-transparent hover:bg-red-950/30 text-zinc-700 hover:text-red-500 border border-zinc-800 hover:border-red-800 rounded-lg text-[9px] font-sans transition cursor-pointer"
         >
-          清除所有本地数据
+          清除数据
         </button>
       </div>
 
     </div>
+    </>
   );
 }

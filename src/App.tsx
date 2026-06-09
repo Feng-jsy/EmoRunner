@@ -41,6 +41,7 @@ export default function App() {
   const [equippedSkin, setEquippedSkin] = useState<SkinId>('default');
   const [ownedSkins, setOwnedSkins] = useState<SkinId[]>(['default']);
   const [lastEmotionTitle, setLastEmotionTitle] = useState<EmotionTitle>('冷静型');
+  const [lastDeathReason, setLastDeathReason] = useState<string>('');
   const [showShop, setShowShop] = useState<boolean>(false);
   const [showAchievements, setShowAchievements] = useState<boolean>(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -185,10 +186,11 @@ export default function App() {
     setGameState('MENU');
   }
 
-  function handleGameOver(scoreVal: number, coinsVal: number, shattered: number, jumps: number, maxCombo: number, expressionStats?: { smileAvg: number; smileMax: number; surpriseAvg: number; surpriseMax: number; jumpTriggers: number; shieldTriggers: number }) {
+  function handleGameOver(scoreVal: number, coinsVal: number, shattered: number, jumps: number, maxCombo: number, expressionStats?: { smileAvg: number; smileMax: number; surpriseAvg: number; surpriseMax: number; jumpTriggers: number; shieldTriggers: number }, usedManualInput?: boolean, shieldFrames?: number, oldHighScore?: number, deathReason?: string) {
     setLastScore(scoreVal);
     setLastCoins(coinsVal);
     setLastEmotionTitle(getEmotionTitle(shattered, jumps, coinsVal));
+    setLastDeathReason(deathReason || '');
 
     // Check daily challenge
     let dcCompleted = dailyChallenge.completed;
@@ -201,6 +203,9 @@ export default function App() {
       if (dc.type === 'coins' && coinsVal >= dc.target) achieved = true;
       if (dc.type === 'distance' && scoreVal >= dc.target) achieved = true;
       if (dc.type === 'combo' && maxCombo >= dc.target) achieved = true;
+      if (dc.type === 'expression_only' && usedManualInput === false) achieved = true;
+      if (dc.type === 'shield_limit' && shieldFrames !== undefined && (shieldFrames / 60) <= dc.target) achieved = true;
+      if (dc.type === 'beat_record' && oldHighScore !== undefined && scoreVal > oldHighScore) achieved = true;
       if (achieved) {
         dcCompleted = true;
         dailyChallengeJustCompleted = true;
@@ -457,14 +462,14 @@ export default function App() {
                 <div className="flex-1 flex flex-col items-center justify-center bg-[#0d0d16] select-none gap-6">
                   <div className="text-center space-y-4">
                     <div className="w-12 h-12 border-4 border-dashed border-cyan-500 rounded-full animate-spin mx-auto" />
-                    <p className="font-press-start text-[10px] text-cyan-400 animate-pulse">正在加载摄像头</p>
-                    <p className="font-sans text-xs text-zinc-500">等待面部识别引擎就绪...</p>
+                    <p className="font-press-start text-[10px] text-cyan-400 animate-pulse">加载摄像头</p>
+                    <p className="font-sans text-xs text-zinc-500">面部识别引擎启动中...</p>
                   </div>
                   <button
                     onClick={() => setGameState('PLAYING')}
                     className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-xs font-medium transition cursor-pointer"
                   >
-                    跳过等待，使用键盘操控
+                    跳过，使用键盘
                   </button>
                 </div>
               )}
@@ -509,12 +514,6 @@ export default function App() {
                     onStatusChange={handleCameraStatus}
                   />
                 </div>
-
-                <div className="mt-3 text-[10px] text-zinc-500 leading-snug space-y-1">
-                  <p className="font-semibold text-zinc-400">🛡️ 机制控制秘诀：</p>
-                  <p>1. 露出洁白牙齿张大微笑 😀 ➔ <b>人物瞬间跳起</b>越过深坑。</p>
-                  <p>2. 张大嘴巴表露震惊 😮 ➔ <b>持续展开等离子护盾</b>，撞碎拦路木箱，获取额外加分！</p>
-                </div>
               </div>
             </div>
 
@@ -541,7 +540,24 @@ export default function App() {
               </div>
             )}
 
-            <h2 className="font-press-start text-xs text-rose-500 tracking-wide mb-6">GAME OVER</h2>
+            <h2 className="font-press-start text-xs text-rose-500 tracking-wide mb-4">GAME OVER</h2>
+
+            {/* Noita-style death cause */}
+            {lastDeathReason && (
+              <div className="mb-5 max-w-sm mx-auto">
+                <div className="bg-gradient-to-b from-red-950/60 to-red-900/20 border-2 border-red-700/50 rounded-xl px-5 py-3 text-center">
+                  <span className="text-[8px] font-press-start text-red-400/70 block mb-1 tracking-widest uppercase">死亡报告</span>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-xl">
+                      {lastDeathReason === 'crushed' ? '📦' : lastDeathReason === 'fell' ? '🕳️' : lastDeathReason === 'burned' ? '🔥' : '🔪'}
+                    </span>
+                    <span className="font-press-start text-[11px] text-red-300 font-bold">
+                      {lastDeathReason === 'crushed' ? '被木箱压碎' : lastDeathReason === 'fell' ? '坠入虚空深渊' : lastDeathReason === 'burned' ? '被熔岩烫死' : '被天花板尖刺刺穿'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {newAchievements.length > 0 && (
               <div className="mb-6 space-y-2 max-w-sm mx-auto">
@@ -576,19 +592,19 @@ export default function App() {
 
             <div className="bg-[#121221] p-4 rounded-2xl border border-zinc-800 space-y-3 mb-6 text-left max-w-sm mx-auto font-mono text-zinc-400">
               <div className="flex justify-between items-center text-sm pb-1.5 border-b border-zinc-800">
-                <span>奔跑里程（最终得分）:</span>
+                <span>里程:</span>
                 <span className="text-retro-gold font-press-start text-xs font-bold">{lastScore}</span>
               </div>
               <div className="flex justify-between items-center text-sm pb-1.5 border-b border-zinc-800">
-                <span>拾取金色硬币:</span>
+                <span>硬币:</span>
                 <span className="text-retro-amber font-press-start text-xs font-bold">{lastCoins}</span>
               </div>
               <div className="flex justify-between items-center text-sm pb-1.5 border-b border-zinc-800">
-                <span>本局情绪称号:</span>
+                <span>称号:</span>
                 <span className="text-cyan-400 font-press-start text-xs font-bold">{lastEmotionTitle}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span>累计硬币:</span>
+                <span>总硬币:</span>
                 <span className="text-retro-gold font-press-start text-xs font-bold">{totalCoins}</span>
               </div>
             </div>
@@ -600,7 +616,7 @@ export default function App() {
                 className="w-full py-3.5 bg-gradient-to-r from-retro-green to-emerald-500 hover:from-[#5eff42] hover:to-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg transition font-press-start text-[10px] flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                再玩一局 (RETRY)
+                再来一局
               </button>
               <p className="text-[9px] text-zinc-600 font-sans text-center">或<b className="text-zinc-400">双击 [空格键]</b> 快速重开</p>
             </div>
@@ -608,7 +624,7 @@ export default function App() {
             {/* Name input for leaderboard */}
             <div className="bg-[#121221] border-2 border-retro-gold/30 rounded-2xl p-4 mb-4 text-center max-w-sm mx-auto">
               <label className="font-press-start text-[8px] text-retro-gold block mb-2">
-                🏷️ 留下你的大名
+                🏷️ 玩家名
               </label>
               <input
                 type="text"
@@ -679,7 +695,7 @@ export default function App() {
                 onClick={() => setGameState('MENU')}
                 className="w-full py-3 bg-zinc-805 hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl transition font-sans text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-800"
               >
-                返回主菜单
+                返回主页
               </button>
 
               <button
@@ -723,10 +739,10 @@ export default function App() {
                   ctx.font = '13px "Courier New", monospace';
 
                   const lines: [string, string][] = [
-                    ['奔跑里程', `${lastScore} 米`],
+                    ['里程', `${lastScore} 米`],
                     ['收集金币', `${lastCoins} 枚`],
                     ['情绪称号', lastEmotionTitle],
-                    ['累计硬币', `${totalCoins} 枚`],
+                    ['总硬币', `${totalCoins} 枚`],
                     ['解锁成就', `${unlockedAchievements.length}/${ACHIEVEMENTS.length}`],
                   ];
 
@@ -760,7 +776,7 @@ export default function App() {
                 className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl transition font-press-start text-[10px] flex items-center justify-center gap-1.5 cursor-pointer border border-zinc-700"
               >
                 {copied ? <Check className="w-4 h-4 text-retro-green" /> : <Share2 className="w-4 h-4" />}
-                {copied ? '已保存!' : '导出战绩截图'}
+                {copied ? '已保存!' : '导出截图'}
               </button>
             </div>
           </div>
@@ -896,8 +912,7 @@ export default function App() {
       )}
 
       <footer className="py-4 text-center text-[10px] text-zinc-600 border-t border-zinc-950 w-full max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-6 gap-2">
-        <span>© 2026 情绪闯关 EmoRunner. Designed utilizing browser face landmark analytics offline.</span>
-        <span>无数据上传，全本地计算，极致安全性。可以使用 <b>[空格]</b> & <b>[S键]</b> 备用键盘操控。</span>
+        <span>© 2026 情绪闯关 EmoRunner. 无数据上传，全本地计算。</span>
       </footer>
 
     </div>

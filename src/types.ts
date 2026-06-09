@@ -70,7 +70,7 @@ export interface CalibrationConfig {
   isCalibrated: boolean;
 }
 
-export type ObstacleType = 'CRATE' | 'PIT' | 'CEILING_SPIKE';
+export type ObstacleType = 'CRATE' | 'PIT' | 'CEILING_SPIKE' | 'FLOATING_SPIKE' | 'HOT_FLOOR';
 
 export interface Obstacle {
   id: string;
@@ -80,6 +80,10 @@ export interface Obstacle {
   height: number;
   color: string;
   isShattered?: boolean;
+  // Floating obstacle movement
+  baseY?: number;
+  moveAmplitude?: number;
+  movePhase?: number;
 }
 
 export interface Coin {
@@ -158,6 +162,7 @@ export const STORAGE_KEYS = {
   leaderboard: 'emotion_run_leaderboard',
   playerName: 'emotion_run_player_name',
   expressionRecords: 'emotion_run_expression_records',
+  tutorialDone: 'emotion_run_tutorial_done',
 } as const;
 
 export interface LeaderboardEntry {
@@ -226,7 +231,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'jumps_200', name: '空中飞人', description: '累计跳跃200次', icon: '✈️', reward: 5 },
 ];
 
-export type ChallengeType = 'jumps' | 'shatter' | 'coins' | 'distance' | 'combo';
+export type ChallengeType = 'jumps' | 'shatter' | 'coins' | 'distance' | 'combo' | 'expression_only' | 'shield_limit' | 'beat_record';
 
 export interface DailyChallenge {
   date: string;
@@ -243,6 +248,9 @@ const CHALLENGE_POOL: { type: ChallengeType; label: string; tiers: { target: num
   { type: 'coins', label: '单局收集硬币', tiers: [{ target: 5, reward: 2 }, { target: 10, reward: 3 }, { target: 20, reward: 5 }] },
   { type: 'distance', label: '单局奔跑', tiers: [{ target: 500, reward: 2 }, { target: 1000, reward: 3 }, { target: 2000, reward: 5 }] },
   { type: 'combo', label: '单局最高连击', tiers: [{ target: 3, reward: 2 }, { target: 5, reward: 3 }, { target: 8, reward: 5 }] },
+  { type: 'expression_only', label: '纯表情操控通关', tiers: [{ target: 1, reward: 4 }] },
+  { type: 'shield_limit', label: '护盾使用不超过', tiers: [{ target: 3, reward: 3 }, { target: 2, reward: 4 }] },
+  { type: 'beat_record', label: '打破个人最远纪录', tiers: [{ target: 0, reward: 5 }] },
 ];
 
 export interface MiniObjective {
@@ -279,11 +287,23 @@ export function generateDailyChallenge(): DailyChallenge {
   const tierIdx = (seed * 7) % CHALLENGE_POOL[poolIdx].tiers.length;
   const pool = CHALLENGE_POOL[poolIdx];
   const tier = pool.tiers[tierIdx];
+
+  let desc: string;
+  if (pool.type === 'expression_only') {
+    desc = '纯表情操控通关（禁用键盘/鼠标）';
+  } else if (pool.type === 'shield_limit') {
+    desc = `${pool.label}${tier.target}秒`;
+  } else if (pool.type === 'beat_record') {
+    desc = '打破个人最远纪录';
+  } else {
+    desc = `${pool.label}${tier.target}次`;
+  }
+
   return {
     date: today,
     type: pool.type,
     target: tier.target,
-    description: `${pool.label}${tier.target}次`,
+    description: desc,
     reward: tier.reward,
     completed: false,
   };

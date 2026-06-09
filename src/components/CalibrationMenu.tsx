@@ -102,8 +102,8 @@ export default function CalibrationMenu({
       <div className="w-full md:w-5/12 flex-shrink-0 flex flex-col justify-between">
         <div className="flex flex-col h-full bg-[#161623] rounded-2xl p-4 border-2 border-zinc-900">
           <div className="font-press-start text-[10px] text-zinc-400 mb-3 flex items-center justify-between">
-            <span>🔴 CALIBRATION CORE</span>
-            <span className="text-zinc-500 text-[8px] animate-pulse">SYSTEM ONLINE</span>
+            <span>🔴 校准</span>
+            <span className="text-zinc-500 text-[8px] animate-pulse">就绪</span>
           </div>
           
           <div className="w-full h-80 relative flex-1 min-h-[300px]">
@@ -125,7 +125,7 @@ export default function CalibrationMenu({
         <div className="flex justify-between items-center pb-4 border-b border-zinc-800 mb-6">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-retro-gold animate-spin" />
-            <span className="font-press-start text-xs text-retro-gold tracking-wide">面部表情校准实验室</span>
+            <span className="font-press-start text-xs text-retro-gold tracking-wide">表情校准实验室</span>
           </div>
           <button
             onClick={onBack}

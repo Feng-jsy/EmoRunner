@@ -99,4 +99,58 @@
 [data-theme="light"] .bg-black\/75 { background-color: rgba(0, 0, 0, 0.08) !important; }
 [data-theme="light"] .bg-black\/80 { background-color: rgba(0, 0, 0, 0.08) !important; }
 [data-theme="light"] .bg-red-950\/60 { background-color: #ffe8e8 !important; }
+[data-theme="light"] .bg-red-950\/30 { background-color: #fff0f0 !important; }
+[data-theme="light"] .bg-red-900\/20 { background-color: #fff5f5 !important; }
+
+/* Game canvas area — softer neutral in light mode */
+[data-theme="light"] .bg-\[\#07070d\] { background-color: #e0e0e8 !important; }
+[data-theme="light"] .bg-\[\#0c0c16\] { background-color: #d8d8e0 !important; }
+[data-theme="light"] .bg-\[\#241d1a\] { background-color: #fff8f0 !important; }
+
+/* bg-zinc-900 variants */
+[data-theme="light"] .bg-zinc-900 { background-color: #e8e8f0 !important; }
+[data-theme="light"] .bg-zinc-900\/50 { background-color: rgba(232, 232, 240, 0.5) !important; }
+[data-theme="light"] .bg-zinc-900\/60 { background-color: rgba(232, 232, 240, 0.6) !important; }
+[data-theme="light"] .bg-zinc-850 { background-color: #e0e0e8 !important; }
+
+/* Color-950 semantic backgrounds → pastel equivalents */
+[data-theme="light"] .bg-emerald-950\/60 { background-color: #e0f5e8 !important; }
+[data-theme="light"] .bg-emerald-950\/40 { background-color: #e8f8ee !important; }
+[data-theme="light"] .bg-indigo-950\/60 { background-color: #e8e8fa !important; }
+[data-theme="light"] .bg-amber-950\/60 { background-color: #faf0e0 !important; }
+[data-theme="light"] .bg-cyan-950\/60 { background-color: #e0f0f8 !important; }
+[data-theme="light"] .bg-cyan-950\/40 { background-color: #e8f4fa !important; }
+[data-theme="light"] .bg-violet-900\/30 { background-color: #f0e8fa !important; }
+
+/* Color-950 hover backgrounds */
+[data-theme="light"] .hover\:bg-cyan-950\/30:hover { background-color: #e8f4fa !important; }
+[data-theme="light"] .hover\:bg-red-950\/30:hover { background-color: #fff0f0 !important; }
+
+/* Retro-gold tinted backgrounds — keep tint visible on light bg */
+[data-theme="light"] .bg-retro-gold\/10 { background-color: rgba(255, 204, 0, 0.12) !important; }
+[data-theme="light"] .bg-retro-gold\/20 { background-color: rgba(255, 204, 0, 0.22) !important; }
+[data-theme="light"] .bg-cyan-500\/10 { background-color: rgba(0, 200, 220, 0.1) !important; }
+
+/* Semantic borders → lighter equivalents */
+[data-theme="light"] .border-red-800 { border-color: #e8b0b0 !important; }
+[data-theme="light"] .border-red-700\/50 { border-color: rgba(220, 150, 150, 0.5) !important; }
+[data-theme="light"] .border-rose-500\/50 { border-color: rgba(220, 150, 160, 0.5) !important; }
+[data-theme="light"] .border-emerald-700\/50 { border-color: rgba(120, 200, 150, 0.5) !important; }
+[data-theme="light"] .border-emerald-800 { border-color: #b0d8c0 !important; }
+[data-theme="light"] .border-cyan-700\/60 { border-color: rgba(120, 180, 210, 0.6) !important; }
+[data-theme="light"] .border-cyan-700\/50 { border-color: rgba(120, 180, 210, 0.5) !important; }
+[data-theme="light"] .border-cyan-700\/40 { border-color: rgba(120, 180, 210, 0.4) !important; }
+[data-theme="light"] .border-cyan-800 { border-color: #b0d0e0 !important; }
+[data-theme="light"] .border-amber-800 { border-color: #e0d0b0 !important; }
+[data-theme="light"] .border-indigo-800 { border-color: #c0c0e0 !important; }
+[data-theme="light"] .border-yellow-700\/50 { border-color: rgba(200, 180, 100, 0.5) !important; }
+[data-theme="light"] .border-purple-500\/40 { border-color: rgba(170, 140, 210, 0.4) !important; }
+[data-theme="light"] .border-retro-gold\/30 { border-color: rgba(200, 170, 0, 0.3) !important; }
+[data-theme="light"] .border-retro-gold\/40 { border-color: rgba(200, 170, 0, 0.4) !important; }
+
+/* Element-specific overrides for components that don't use utility classes */
+[data-theme="light"] .border-zinc-700\/60 { border-color: rgba(200, 200, 210, 0.6) !important; }
+
+/* Input fields */
+[data-theme="light"] .placeholder-zinc-600::placeholder { color: #9999aa !important; }
 
