@@ -218,7 +218,7 @@ export default function App() {
       totalJumps: totalStats.totalJumps + jumps,
       totalShattered: totalStats.totalShattered + shattered,
       totalGames: totalStats.totalGames + 1,
-      totalDistance: totalStats.totalDistance + scoreVal * 10,
+      totalDistance: totalStats.totalDistance + scoreVal,
       totalCoinsCollected: totalStats.totalCoinsCollected + coinsVal,
       maxCombo: Math.max(totalStats.maxCombo, maxCombo),
     };

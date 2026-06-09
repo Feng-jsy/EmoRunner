@@ -304,6 +304,7 @@ export default function GameEngine({
   const shieldTriggerCountRef = useRef<number>(0);
   const wasSmilingRef = useRef<boolean>(false);
   const wasShieldingRef = useRef<boolean>(false);
+  const manualShieldDesiredRef = useRef<boolean>(false);
 
   // Playable settings
   const gravity = 0.05;
@@ -354,12 +355,15 @@ export default function GameEngine({
 
   const skin = SHOP_SKINS.find((s) => s.id === skinId) || SHOP_SKINS[0];
 
-  // Load highscore from localStorage
+  // Load highscore from localStorage (migrate old score format: ×10)
   useEffect(() => {
     try {
       const stored = localStorage.getItem('retro_run_highscore');
       if (stored) {
-        setHighScore(parseInt(stored, 10));
+        let val = parseInt(stored, 10);
+        // Old format: score = distance/10. If value seems too small for meters, convert.
+        if (val > 0 && val < 1000) val *= 10;
+        setHighScore(val);
       }
     } catch (_) {}
   }, []);
@@ -416,8 +420,8 @@ export default function GameEngine({
       wasSmilingRef.current = false;
     }
 
-    // Surprise → shield (continuous hold)
-    const shouldShield = surpriseLevel > surpriseThreshold;
+    // Surprise → shield (continuous hold, OR with manual input)
+    const shouldShield = surpriseLevel > surpriseThreshold || manualShieldDesiredRef.current;
     if (shouldShield !== playerRef.current.shieldActive) {
       if (shouldShield && oxygenRef.current > 0) {
         audio.playShieldOn();
@@ -445,7 +449,9 @@ export default function GameEngine({
       return;
     }
 
-    playerRef.current.shieldActive = false;
+    if (externalAction.action === 'SHIELD_OFF' && !manualShieldDesiredRef.current) {
+      playerRef.current.shieldActive = false;
+    }
   }, [externalAction, gameState]);
 
   // Setup Keyboard Fallback Event Listeners
@@ -471,6 +477,7 @@ export default function GameEngine({
 
       if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
         e.preventDefault();
+        manualShieldDesiredRef.current = true;
         if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
           audio.playShieldOn();
           playerRef.current.shieldActive = true;
@@ -484,6 +491,7 @@ export default function GameEngine({
       if (gameState !== 'PLAYING') return;
 
       if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+        manualShieldDesiredRef.current = false;
         playerRef.current.shieldActive = false;
       }
     };
@@ -495,6 +503,7 @@ export default function GameEngine({
         triggerJump();
       } else if (e.button === 2) { // right click = shield
         e.preventDefault();
+        manualShieldDesiredRef.current = true;
         if (!playerRef.current.shieldActive && oxygenRef.current > 0) {
           audio.playShieldOn();
           playerRef.current.shieldActive = true;
@@ -504,6 +513,7 @@ export default function GameEngine({
     const handleMouseUp = (e: MouseEvent) => {
       if (gameState !== 'PLAYING' || pausedRef.current) return;
       if (e.button === 2) { // release right = shield off
+        manualShieldDesiredRef.current = false;
         playerRef.current.shieldActive = false;
       }
     };
@@ -661,6 +671,7 @@ export default function GameEngine({
     shieldTriggerCountRef.current = 0;
     wasSmilingRef.current = false;
     wasShieldingRef.current = false;
+    manualShieldDesiredRef.current = false;
     frameCounterRef.current = 0;
 
     // Begin looping
@@ -726,7 +737,7 @@ export default function GameEngine({
 
     // --- 1. PHYSICS UPDATE ---
     distanceTraveledRef.current += speed;
-    scoreRef.current = Math.floor(distanceTraveledRef.current / 10);
+    scoreRef.current = Math.floor(distanceTraveledRef.current);
     if (comboCountRef.current >= 3) {
       scoreRef.current += comboCountRef.current;
     }
@@ -2109,8 +2120,8 @@ export default function GameEngine({
         {/* Dynamic score counter */}
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-retro-gold animate-bounce" fill="#ffcc00" />
-          <span>得分:</span>
-          <span className="text-retro-gold font-bold text-xs">{score}</span>
+          <span>里程:</span>
+          <span className="text-retro-gold font-bold text-xs">{score} m</span>
         </div>
 
         {/* Coins tally */}
@@ -2123,7 +2134,7 @@ export default function GameEngine({
         {/* Zone indicator */}
         <div className="flex items-center gap-1.5">
           <span className="text-[8px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-900/60">
-            {['🌟 自信区', '😰 焦虑区', '💥 爆发区'][Math.floor(score * 10 / 2000) % 3]}
+            {['🌟 自信区', '😰 焦虑区', '💥 爆发区'][Math.floor(score / 2000) % 3]}
           </span>
         </div>
 
@@ -2148,8 +2159,8 @@ export default function GameEngine({
         {/* Global Record */}
         <div className="hidden sm:flex items-center gap-1.5 text-zinc-500">
           <Trophy className="w-3.5 h-3.5 text-zinc-600" />
-          <span>最高分:</span>
-          <span className="font-bold">{highScore}</span>
+          <span>最远:</span>
+          <span className="font-bold">{highScore} m</span>
         </div>
 
         {/* System Settings & Toggles */}
