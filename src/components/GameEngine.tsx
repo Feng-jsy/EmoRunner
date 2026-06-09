@@ -23,7 +23,7 @@ interface GameEngineProps {
   onRestart: () => void;
 }
 
-// Over-the-top praise messages for every 1000m milestone
+// Over-the-top praise messages for every 5000m milestone (50 entries)
 const PRAISE_POOL: string[] = [
   '老板看了都想给你加薪！💰',
   '你的腿是装了火箭吗？🚀',
@@ -50,6 +50,31 @@ const PRAISE_POOL: string[] = [
   '猎头已经打爆你电话了！📱',
   '你是打工人的终极形态！🦸',
   '联合国发来贺电！🌍',
+  'HR已把你的表情设为培训教材！🎭',
+  '你的笑容治愈了整个部门！🏥',
+  '隔壁组已经在打听你的工号！🔍',
+  '系统检测到你的气场已爆表！📊',
+  '拒绝过你的公司正在集体后悔！💔',
+  '嘴角上扬角度已载入吉尼斯！📐',
+  '同事众筹给你立雕像已达标！🗿',
+  '多巴胺分泌量打破公司纪录！🧪',
+  '全国HR协会已发来警告通知！⚠️',
+  '你的快乐因子正在全城扩散！☢️',
+  '今日最佳员工你全票当选！🗳️',
+  '公司股价因你表现上涨3%！📈',
+  '你已被列入核心人才保护名单！🛡️',
+  '招聘网站为你开设了专属页面！🌐',
+  '你的抗压数据已被写入教科书！📚',
+  '月球基地项目已提名你为队长！🌙',
+  '人力部因为你修改了考核标准！📋',
+  '你的快乐指数拉高了城市均值！🏙️',
+  '连键盘都在为你自动鼓掌！👏',
+  '辞退信在你面前会自动销毁！🔥',
+  '你的表情肌已达奥林匹克级别！🥇',
+  '诺贝尔经济学奖提名已发出！🎖️',
+  '硅谷风投正在研究你的简历！🔬',
+  '你的耐力让马拉松选手沉默！🏃',
+  '本周热搜第一就是你！🔥',
 ];
 
 export default function GameEngine({
@@ -135,7 +160,7 @@ export default function GameEngine({
   const milestoneAlphaRef = useRef<number>(0);
   const milestoneTimestampRef = useRef<number>(0); // for 4s fade-in/out timing
   const praiseMessageRef = useRef<string>('');
-  const coinRainPhaseRef = useRef<number>(0); // 0="v3.0", 1="hello~", 2+=random
+  const coinRainPhaseRef = useRef<number>(0); // 0="v3.1", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
@@ -564,7 +589,7 @@ export default function GameEngine({
       }
     }
 
-    // Milestone check (every 1000m) + random praise message
+    // Milestone check (every 5000m) + random praise message
     const currentMilestone = Math.floor(distanceTraveledRef.current / GAME_BALANCE.milestoneInterval);
     if (currentMilestone > lastMilestoneRef.current) {
       lastMilestoneRef.current = currentMilestone;

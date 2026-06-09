@@ -161,7 +161,7 @@ export default function MainMenu({
             情绪闯关 EmoRunner
           </h1>
           <div className="absolute -top-3 -right-6 text-[9px] font-press-start bg-rose-500 text-white font-bold px-1 py-0.5 rounded rotate-12 scale-90 animate-bounce">
-                        MVP+ v3.0
+                        MVP+ v3.1
           </div>
         </div>
         
