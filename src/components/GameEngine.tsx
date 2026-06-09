@@ -873,32 +873,11 @@ export default function GameEngine({
     obstaclesRef.current.forEach((obs) => {
       if (obs.type === 'PIT' && !obs.isShattered) {
         const playerCenter = player.x + player.width / 2;
-        const playerRight = player.x + player.width;
         const pitLeft = obs.x;
         const pitRight = obs.x + obs.width;
-
-        // Natural ledge-fall: trigger when ~60% of player is over the pit
-        const overPitLeft = playerRight - 8 > pitLeft + 2;
-        const beforePitRight = playerCenter < pitRight - 2;
-        if (overPitLeft && beforePitRight) {
+        // Simple center-based detection: fall when player is clearly over the pit
+        if (playerCenter > pitLeft + 5 && playerCenter < pitRight - 5) {
           isInPitSector = true;
-        }
-
-        // Below-ground wall blocking: pit walls are solid underground,
-        // player must jump to surface height to escape
-        const playerBelowGround = player.y > floorYLevel - player.height;
-        if (playerBelowGround) {
-          // Player is inside or touching the pit zone → block at walls
-          if (playerCenter < pitRight && player.x + player.width > pitLeft) {
-            // Right wall: block exit to the right while underground
-            if (playerCenter >= pitRight - 3) {
-              player.x = pitRight;
-            }
-            // Left wall: block re-entry from left while underground
-            if (playerCenter <= pitLeft + 3) {
-              player.x = pitLeft - player.width;
-            }
-          }
         }
       }
     });
@@ -1574,14 +1553,14 @@ export default function GameEngine({
       ctx.fillRect(starX, starY, size, size);
     }
 
-    // Parallax Mountain range — multi-octave procedural ridges (seamless scroll)
+    // Parallax Mountain range — procedural ridges, seamless scroll
     const scroll1 = distanceTraveledRef.current * 0.45;
     ctx.fillStyle = curMountain;
     ctx.beginPath();
     ctx.moveTo(0, H);
-    for (let sx = 0; sx <= W + 30; sx += 25) {
+    for (let sx = 0; sx <= W + 60; sx += 50) {
       const wx = sx + scroll1;
-      const h = 120 + Math.sin(wx * 0.005) * 40 + Math.sin(wx * 0.013 + 1.2) * 28 + Math.sin(wx * 0.031 + 2.8) * 14;
+      const h = 120 + Math.sin(wx * 0.005) * 38 + Math.sin(wx * 0.017 + 1.3) * 24;
       ctx.lineTo(sx, floorYLevel - h);
     }
     ctx.lineTo(W, H);
@@ -1593,9 +1572,9 @@ export default function GameEngine({
     ctx.fillStyle = '#21213f';
     ctx.beginPath();
     ctx.moveTo(0, H);
-    for (let sx = 0; sx <= W + 30; sx += 20) {
+    for (let sx = 0; sx <= W + 40; sx += 35) {
       const wx = sx + scroll2;
-      const h = 55 + Math.sin(wx * 0.009) * 22 + Math.sin(wx * 0.025 + 0.9) * 14 + Math.sin(wx * 0.053 + 3.5) * 8;
+      const h = 55 + Math.sin(wx * 0.009) * 20 + Math.sin(wx * 0.028 + 0.7) * 13;
       ctx.lineTo(sx, floorYLevel - h);
     }
     ctx.lineTo(W, H);
