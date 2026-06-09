@@ -23,7 +23,7 @@ interface GameEngineProps {
   onRestart: () => void;
 }
 
-// Over-the-top praise messages for every 5000m milestone (50 entries)
+// Over-the-top praise messages for every 2000m milestone (50 entries)
 const PRAISE_POOL: string[] = [
   '老板看了都想给你加薪！💰',
   '你的腿是装了火箭吗？🚀',
@@ -589,7 +589,7 @@ export default function GameEngine({
       }
     }
 
-    // Milestone check (every 5000m) + random praise message
+    // Milestone check (every 2000m) + random praise message
     const currentMilestone = Math.floor(distanceTraveledRef.current / GAME_BALANCE.milestoneInterval);
     if (currentMilestone > lastMilestoneRef.current) {
       lastMilestoneRef.current = currentMilestone;

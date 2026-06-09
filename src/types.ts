@@ -51,7 +51,7 @@ export const GAME_BALANCE = {
   comboScoreThreshold: 3,
 
   // Milestone
-  milestoneInterval: 5000, // every N meters
+  milestoneInterval: 2000, // every N meters
 
   // Mini-objective celebration
   miniObjCelebrateFrames: 90,
