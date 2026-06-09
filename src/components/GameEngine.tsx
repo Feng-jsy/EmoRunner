@@ -884,8 +884,8 @@ export default function GameEngine({
               return;
             }
           }
-          // Right wall: player walks into pit from right
-          if (player.x < pitRight - 4 && playerCenter >= pitRight - 8) {
+          // Right wall: only when player is actually on the RIGHT side of pit
+          if (player.x >= pitRight - 3) {
             player.x = pitRight;
             player.pushedAlertTick = 12;
             if (player.x < GAME_BALANCE.playerDeathEdgeX) {
