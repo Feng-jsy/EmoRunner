@@ -342,7 +342,7 @@ export default function GameEngine({
   const milestoneAlphaRef = useRef<number>(0);
   const milestoneTimestampRef = useRef<number>(0); // for 4s fade-in/out timing
   const praiseMessageRef = useRef<string>('');
-  const coinRainPhaseRef = useRef<number>(0); // 0="v2.26", 1="hello~", 2+=random
+  const coinRainPhaseRef = useRef<number>(0); // 0="v2.30", 1="hello~", 2+=random
   const miniObjRef = useRef<MiniObjective>(pickRandomMiniObjective());
   const miniObjProgressRef = useRef<number>(0);
   const miniObjDoneRef = useRef<boolean>(false);
@@ -873,7 +873,7 @@ export default function GameEngine({
       }
     });
 
-    // Landing on regular ground level
+    // Landing on regular ground level — only snap if near surface (not deep in pit)
     if (player.y >= floorYLevel - player.height) {
       if (isInPitSector) {
         // Player falls into the pit void! Cannot stand on ground here.
@@ -882,8 +882,8 @@ export default function GameEngine({
         if (player.airJumpsLeft === 0) {
           player.airJumpsLeft = 1;
         }
-      } else {
-        // Safe ground landing
+      } else if (player.y <= floorYLevel - player.height + 8) {
+        // Safe ground landing — only when at/near surface
         player.y = floorYLevel - player.height;
         player.vy = 0;
         player.isGrounded = true;
@@ -933,17 +933,32 @@ export default function GameEngine({
             id: `crate_after_${Date.now()}`,
             type: 'CRATE', x: W + 155, width: 32, height: 38, color: '#c07038',
           });
-          coinsListRef.current.push({
-            id: `coin_guide_${Date.now()}`,
-            x: W + 55, y: floorYLevel - 85, collected: false,
-          });
+          // Jump-guide arc over the pit → crate
+          const guideN = 3;
+          for (let g = 0; g < guideN; g++) {
+            const t = (g + 1) / (guideN + 1);
+            const xOff = t * 135; // pit(100) + gap(35) → crate
+            const yOff = 4 * 72 * t * (1 - t);
+            coinsListRef.current.push({
+              id: `coin_guide_${Date.now()}_${g}`,
+              x: W + 20 + xOff,
+              y: floorYLevel - 18 - yOff,
+              collected: false,
+            });
+          }
         } else if (pattern === 1) {
-          for (let i = 0; i < 5; i++) {
-            const angle = (i / 4) * Math.PI;
+          // Parabolic coin arc — matches natural jump
+          const arcN = 5;
+          const arcSpan = 120;
+          const arcPeak = 75;
+          for (let i = 0; i < arcN; i++) {
+            const t = i / (arcN - 1);
+            const xOff = t * arcSpan;
+            const yOff = 4 * arcPeak * t * (1 - t);
             coinsListRef.current.push({
               id: `coin_arc_${Date.now()}_${i}`,
-              x: W + 20 + i * 24,
-              y: floorYLevel - 55 - Math.sin(angle) * 60,
+              x: W + 20 + xOff,
+              y: floorYLevel - 18 - yOff,
               collected: false,
             });
           }
@@ -969,36 +984,73 @@ export default function GameEngine({
         if (Math.random() < pitPairChance) {
           const gap = 60 + Math.random() * 100; // tight gap between pits
           const pitW = 70 + Math.random() * 30;
-          obstaclesRef.current.push({
-            id: `pit_pairA_${Date.now()}`,
-            type: 'PIT', x: W + 20, width: pitW, height: 120, color: '#111119',
-          });
-          obstaclesRef.current.push({
-            id: `pit_pairB_${Date.now()}`,
-            type: 'PIT', x: W + 20 + pitW + gap, width: pitW + Math.random() * 20, height: 120, color: '#111119',
-          });
-          // Reward coin in the gap
-          coinsListRef.current.push({
-            id: `coin_gap_${Date.now()}`,
-            x: W + 20 + pitW + gap / 2, y: floorYLevel - 75, collected: false,
-          });
+          const pitBWidth = pitW + Math.random() * 20;
+          const pitAX = W + 20;
+          const pitBX = W + 20 + pitW + gap;
+          // Max combined width a double-jump can cross (with speed≥1.0)
+          const maxPitWidth = 250;
+
+          if (gap < 10) {
+            // Overlapping pits → merge into one, no red divider
+            const mergedWidth = Math.min(pitBX + pitBWidth - pitAX, maxPitWidth);
+            obstaclesRef.current.push({
+              id: `pit_merged_${Date.now()}`,
+              type: 'PIT', x: pitAX, width: mergedWidth, height: 120, color: '#111119',
+            });
+            coinsListRef.current.push({
+              id: `coin_gap_${Date.now()}`,
+              x: pitAX + mergedWidth / 2, y: floorYLevel - 75, collected: false,
+            });
+          } else {
+            obstaclesRef.current.push({
+              id: `pit_pairA_${Date.now()}`,
+              type: 'PIT', x: pitAX, width: pitW, height: 120, color: '#111119',
+            });
+            obstaclesRef.current.push({
+              id: `pit_pairB_${Date.now()}`,
+              type: 'PIT', x: pitBX, width: pitBWidth, height: 120, color: '#111119',
+            });
+            // Reward coin in the gap
+            coinsListRef.current.push({
+              id: `coin_gap_${Date.now()}`,
+              x: W + 20 + pitW + gap / 2, y: floorYLevel - 75, collected: false,
+            });
+          }
         } else {
+          // Single pit with jump-guide coin arc
+          const pitW = 105;
           obstaclesRef.current.push({
             id: `pit_${Date.now()}`,
-            type: 'PIT', x: W + 20, width: 105, height: 120, color: '#111119',
+            type: 'PIT', x: W + 20, width: pitW, height: 120, color: '#111119',
           });
-          coinsListRef.current.push({
-            id: `coin_${Date.now()}`,
-            x: W + 20 + 38, y: floorYLevel - 80, collected: false,
-          });
+          // Arc of 3 coins tracing natural jump parabola over the pit
+          const guideCoinCount = 3;
+          for (let g = 0; g < guideCoinCount; g++) {
+            const t = (g + 1) / (guideCoinCount + 1); // 0.25, 0.5, 0.75
+            const xOff = t * pitW;
+            // Parabola: y = 4*h*t*(1-t), peaks at 75px
+            const yOff = 4 * 70 * t * (1 - t);
+            coinsListRef.current.push({
+              id: `coin_${Date.now()}_${g}`,
+              x: W + 20 + xOff,
+              y: floorYLevel - 18 - yOff,
+              collected: false,
+            });
+          }
         }
       } else if (rand < coinThreshold) {
-        const count = 3 + Math.floor(Math.random() * 3);
-        for (let idx = 0; idx < count; idx++) {
+        // Jump-arc coin trail: parabolic pattern = natural jump trajectory
+        const coinCount = 5 + Math.floor(Math.random() * 4); // 5-8 coins
+        const arcSpanX = 120 + Math.random() * 80;
+        const arcPeakY = 65 + Math.random() * 55; // peak height above ground
+        for (let i = 0; i < coinCount; i++) {
+          const t = i / (coinCount - 1); // 0 → 1
+          const xOff = t * arcSpanX;
+          const yOff = 4 * arcPeakY * t * (1 - t);
           coinsListRef.current.push({
-            id: `coin_${Date.now()}_${idx}`,
-            x: W + 20 + idx * 30,
-            y: floorYLevel - 45 - Math.sin(idx) * 20,
+            id: `coin_${Date.now()}_${i}`,
+            x: W + 20 + xOff,
+            y: floorYLevel - 18 - yOff,
             collected: false,
           });
         }
@@ -1030,20 +1082,21 @@ export default function GameEngine({
       const coinSize = 10;
 
       if (coinRainPhaseRef.current === 0) {
-        // First rain: spell out "v2.26"
+        // First rain: spell out "v2.30"
         coinRainPhaseRef.current = 1;
         const startX = W + 20;
         const startY = 100;
         const charV  = [[0,0],[0,4],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,1],[4,3],[5,2]];
         const char2  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,3],[4,2],[5,1],[6,0],[6,1],[6,2],[6,3],[6,4]];
         const charDot = [[4,1],[5,1]];
-        const char6  = [[0,1],[0,2],[0,3],[0,4],[1,0],[2,0],[2,1],[2,2],[2,3],[3,0],[3,4],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const char3  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,4],[3,2],[3,3],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
+        const char0  = [[0,1],[0,2],[0,3],[1,0],[1,4],[2,0],[2,4],[3,0],[3,4],[4,0],[4,4],[5,0],[5,4],[6,1],[6,2],[6,3]];
         const chars: [number, number, number[][]][] = [
           [0, 0, charV],
           [6, 0, char2],
           [13, 0, charDot],
-          [19, 0, char2],
-          [26, 0, char6],
+          [19, 0, char3],
+          [26, 0, char0],
         ];
         let id = 0;
         chars.forEach(([colOffset, _rowOffset, bitmap]) => {
