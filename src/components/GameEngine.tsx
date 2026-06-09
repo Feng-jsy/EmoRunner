@@ -861,38 +861,18 @@ export default function GameEngine({
 
     obstaclesRef.current.forEach((obs) => {
       if (obs.type === 'PIT' && !obs.isShattered) {
-        // Find if player center coordinates align vertically with the pit gap
         const playerCenter = player.x + player.width / 2;
+        const playerRight = player.x + player.width;
         const pitLeft = obs.x;
         const pitRight = obs.x + obs.width;
 
-        // If the player center is over the empty mouth of the pit, they fall into the void:
-        if (playerCenter > pitLeft + 3 && playerCenter < pitRight - 3) {
+        // Natural ledge-fall: trigger when a significant portion of the player
+        // is over the pit (right third of body past the left edge, center before right edge).
+        // No wall collision — pits are holes, not solid objects.
+        const overPitLeft = playerRight - 8 > pitLeft + 2;
+        const beforePitRight = playerCenter < pitRight - 2;
+        if (overPitLeft && beforePitRight) {
           isInPitSector = true;
-        }
-
-        // Pit wall collision: solid walls at ground level (no clipping through pit sides)
-        const atGround = player.y >= floorYLevel - player.height - 4;
-        if (atGround && !isInPitSector) {
-          const pxRight = player.x + player.width;
-          // Left wall: player walks into pit from left
-          if (pxRight > pitLeft + 4 && playerCenter <= pitLeft + 8) {
-            player.x = pitLeft - player.width;
-            player.pushedAlertTick = 12;
-            if (player.x < GAME_BALANCE.playerDeathEdgeX) {
-              triggerDeathState('crushed');
-              return;
-            }
-          }
-          // Right wall: only when player is actually on the RIGHT side of pit
-          if (player.x >= pitRight - 3) {
-            player.x = pitRight;
-            player.pushedAlertTick = 12;
-            if (player.x < GAME_BALANCE.playerDeathEdgeX) {
-              triggerDeathState('crushed');
-              return;
-            }
-          }
         }
       }
     });
